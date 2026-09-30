@@ -26,6 +26,7 @@ body { background: #1a1d14; color: var(--ink); font-family: var(--body); font-si
 #view { position: absolute; inset: 0; }
 #view canvas { display: block; width: 100%; height: 100%; }
 #danger { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .4s; background: radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(200,20,10,.55) 100%); }
+#fade { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; }
 #caught { position: absolute; left: 50%; top: 30%; transform: translateX(-50%) rotate(-1deg); background: var(--paper); color: var(--graphite); font-family: var(--display); font-weight: 700; font-size: clamp(30px, 7vw, 46px); padding: 14px 24px; border-radius: 3px; box-shadow: 0 10px 30px rgba(0,0,0,.45); text-align: center; pointer-events: none; display: grid; gap: 2px; }
 #caught small { font-family: var(--body); font-size: 15px; font-weight: 400; }
 .hud { position: absolute; top: 12px; left: 16px; right: 16px; display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; pointer-events: none; }
@@ -68,6 +69,7 @@ button { font: inherit; cursor: pointer; }
 <div id="game">
   <div id="view"></div>
   <div id="danger" aria-hidden="true"></div>
+  <div id="fade" aria-hidden="true"></div>
   <div id="caught" hidden>Динозавр поймал вас!<small>Начинаем сначала</small></div>
   <div class="hud">
     <div class="stat">
@@ -105,7 +107,7 @@ button { font: inherit; cursor: pointer; }
   <div class="overlay" id="intro">
     <div class="card">
       <h1>Лабиринт со стикера</h1>
-      <p>Ваш рисунок превратился в целый мир, и каждый его уголок не похож на соседний. Найдите выход — синюю букву E. По лабиринту бродит динозавр: он видит перед собой и слышит ваши шаги. Заметит — погонится, а поймает — начнёте сначала. Если он замер и уставился на вас, а голова наливается багровым, у вас пара секунд, чтобы скрыться.</p>
+      <p>Ваш рисунок превратился в целый мир, и каждый его уголок не похож на соседний. Найдите выход — синюю букву E. По лабиринту бродят три динозавра, и один из них сторожит выход. Они видят перед собой и слышат ваши шаги, а вы слышите их ворчание и топот, так что включите звук. Заметит — погонится, а поймает — начнёте сначала. Если динозавр замер и уставился на вас, а голова наливается багровым, у вас пара секунд, чтобы скрыться.</p>
       <div class="keys">
         <span><kbd>W</kbd> <kbd>S</kbd> / <kbd>↑</kbd> <kbd>↓</kbd></span><span>вперёд и назад</span>
         <span><kbd>A</kbd> <kbd>D</kbd> / <kbd>←</kbd> <kbd>→</kbd></span><span>поворот</span>
@@ -683,8 +685,8 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     if (k === " " && !e.repeat && st.running) jumpQueued = .15;
     // secret: press M twice quickly to toggle the map
     if ((k === "m" || k === "ь") && !e.repeat) secretTap();
-    if ((k === "r" || k === "к") && !e.repeat) { restart(); spawnDino(); }
-    if (k === "enter") { if (!intro.hidden) begin(); else if (!win.hidden) { restart(); spawnDino(); } }
+    if ((k === "r" || k === "к") && !e.repeat && !cut) { restart(); spawnAll(); }
+    if (k === "enter") { if (!intro.hidden) begin(); else if (!win.hidden) { restart(); spawnAll(); } }
   });
   addEventListener("keyup", e => { keys[e.key.toLowerCase()] = false; });
   addEventListener("blur", () => { for (const k in keys) keys[k] = false; });
@@ -711,11 +713,12 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
   function begin() { audioInit(); intro.hidden = true; st.running = true; curZone = zoneAt(st.x, st.z); }
   document.getElementById("start").addEventListener("click", begin);
   function restart() { st = fresh(); pitch = 0; win.hidden = true; st.running = intro.hidden; curZone = zoneAt(st.x, st.z); reveal(); updateHud(); drawMini(); }
-  document.getElementById("restart").addEventListener("click", () => { restart(); spawnDino(); });
-  document.getElementById("again").addEventListener("click", () => { restart(); spawnDino(); });
+  document.getElementById("restart").addEventListener("click", () => { if (cut) return; audioInit(); restart(); spawnAll(); });
+  document.getElementById("again").addEventListener("click", () => { audioInit(); restart(); spawnAll(); });
 
   let bob = 0;
   function update(dt) {
+    if (cut) { updateCatch(dt); return; }
     if (caughtT > 0) { caughtT -= dt; if (caughtT <= 0) caughtEl.hidden = true; }
     if (!st.running || st.won) return;
     st.t += dt;
@@ -741,7 +744,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     const b = zoneAt(st.x, st.z);
     if (b !== curZone) { if (b === pendingZone) { zoneHold += dt; if (zoneHold > .35) { curZone = b; if (!st.lands.includes(b)) st.lands.push(b); } } else { pendingZone = b; zoneHold = 0; } }
     if (Math.hypot(st.x - EX, st.z - EZ) < .3) { finish(); return; }
-    dinoUpdate(dt, moving);
+    dinosUpdate(dt, moving);
   }
   const fmt = t => { const m = Math.floor(t / 60), s = t - m * 60; return m + ":" + (s < 10 ? "0" : "") + s.toFixed(1); };
   const timeEl = document.getElementById("time"), distEl = document.getElementById("dist"), landsEl = document.getElementById("lands");
@@ -756,10 +759,10 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     win.hidden = false; document.getElementById("again").focus();
   }
 
-  // ---------- dinosaur ----------
+  // ---------- dinosaurs ----------
   const PLAYER_SPEED = 1.5;
-  const DINO = { calm: .5 * PLAYER_SPEED, chaseFast: 1.1 * PLAYER_SPEED, chaseSlow: .8 * PLAYER_SPEED, fov: Math.PI / 4, view: 7, hear: 4, forget: 5, catchR: .2 };
-  // walkable cells for the dinosaur: free cells at least one cell away from walls (props don't stop it)
+  const DINO = { chaseFast: 1.1 * PLAYER_SPEED, chaseSlow: .8 * PLAYER_SPEED, fov: Math.PI / 4, view: 7, hear: 4, forget: 5, catchR: .2, hearRange: 9 };
+  // walkable cells for dinosaurs: free cells at least one cell away from walls (props don't stop them)
   const nav = new Uint8Array(W * H);
   for (let r = 1; r < H - 1; r++) for (let c = 1; c < W - 1; c++) {
     let ok = !bits[r * W + c];
@@ -773,7 +776,6 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
       const r = r0 + dr, c = c0 + dc; if (r >= 0 && c >= 0 && r < H && c < W && nav[r * W + c]) return r * W + c; }
     return i;
   }
-  // distance field (in cells) from a target over walkable cells
   const qbuf = new Int32Array(W * H);
   function field(target, out) {
     out.fill(-1); target = nearestNav(target); out[target] = 0; let h = 0, t = 0; qbuf[t++] = target;
@@ -785,175 +787,273 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     return out;
   }
   const idxOf = (x, z) => Math.max(0, Math.min(H - 1, Math.floor(z * K))) * W + Math.max(0, Math.min(W - 1, Math.floor(x * K)));
-  // straight line of sight, blocked only by walls
+  const cellX = i => (i % W + .5) / K, cellZ = i => ((i / W | 0) + .5) / K;
   function lineOfSight(x1, z1, x2, z2) {
-    const d = Math.hypot(x2 - x1, z2 - z1), n = Math.ceil(d * K * 2);
+    const n = Math.ceil(Math.hypot(x2 - x1, z2 - z1) * K * 2);
     for (let i = 1; i < n; i++) { const t = i / n; if (bits[idxOf(x1 + (x2 - x1) * t, z1 + (z2 - z1) * t)]) return false; }
     return true;
   }
-
   function navLine(x1, z1, x2, z2) {
     const n = Math.ceil(Math.hypot(x2 - x1, z2 - z1) * K * 3);
     for (let i = 1; i <= n; i++) { const t = i / n; if (!nav[idxOf(x1 + (x2 - x1) * t, z1 + (z2 - z1) * t)]) return false; }
     return true;
   }
-  // Model: an original chunky voxel dinosaur (teal, orange back plates)
-  const dinoG = new THREE.Group(); scene.add(dinoG);
+
+  // ---- model: an original chunky voxel dinosaur (teal, orange back plates) ----
   const dm = c => new THREE.MeshLambertMaterial({ color: c, flatShading: true });
   const M_BODY = dm(0x2f8f7a), M_BELLY = dm(0xe0d2a0), M_PLATE = dm(0xf08a30), M_DARK = dm(0x1d3a34), M_TOOTH = dm(0xfff6e0);
-  const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffe040 });
-  const bx = (w, h, d, m, x, y, z, parent = dinoG) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); parent.add(o); return o; };
-  bx(.26, .15, .15, M_BODY, 0, .27, 0); bx(.2, .06, .12, M_BELLY, .01, .2, 0);
-  const M_HEAD = dm(0x2f8f7a);
-  bx(.12, .1, .11, M_HEAD, .15, .34, 0);                       // neck
-  const head = new THREE.Group(); head.position.set(.2, .4, 0); dinoG.add(head);
-  bx(.16, .09, .12, M_HEAD, .06, .02, 0, head); bx(.12, .012, .1, M_DARK, .07, -.03, 0, head);
-  for (let i = 0; i < 4; i++) { bx(.012, .02, .012, M_TOOTH, .02 + i * .03, -.035, .04, head); bx(.012, .02, .012, M_TOOTH, .02 + i * .03, -.035, -.04, head); }
-  // lower jaw hinges at the back of the head and opens as the dinosaur gets angry
-  const jaw = new THREE.Group(); jaw.position.set(-.01, -.04, 0); head.add(jaw);
-  bx(.14, .03, .1, M_HEAD, .08, -.01, 0, jaw); bx(.12, .01, .08, M_DARK, .08, .008, 0, jaw);
-  for (let i = 0; i < 3; i++) { bx(.012, .018, .012, M_TOOTH, .04 + i * .03, .014, .035, jaw); bx(.012, .018, .012, M_TOOTH, .04 + i * .03, .014, -.035, jaw); }
-  const eyeL = bx(.022, .022, .01, eyeMat, .06, .045, .061, head), eyeR = bx(.022, .022, .01, eyeMat, .06, .045, -.061, head);
-  bx(.03, .03, .124, M_DARK, .055, .06, 0, head);              // brow
-  for (let i = 0; i < 5; i++) { const p = new THREE.Mesh(new THREE.ConeGeometry(.03, .07 - i * .006, 4), M_PLATE); p.position.set(.12 - i * .07, .37, 0); dinoG.add(p); }
-  const tail = new THREE.Group(); tail.position.set(-.13, .28, 0); dinoG.add(tail);
-  bx(.14, .09, .1, M_BODY, -.07, 0, 0, tail); bx(.12, .06, .07, M_BODY, -.19, -.02, 0, tail); bx(.1, .035, .045, M_BODY, -.29, -.035, 0, tail);
-  const armL = bx(.05, .02, .02, M_BODY, .12, .24, .08), armR = bx(.05, .02, .02, M_BODY, .12, .24, -.08);
-  const legs = [.07, -.07].map(z => { const g = new THREE.Group(); g.position.set(0, .22, z); dinoG.add(g);
-    bx(.07, .14, .06, M_BODY, 0, -.07, 0, g); bx(.09, .025, .07, M_DARK, .02, -.2, 0, g); bx(.045, .08, .05, M_BODY, .005, -.16, 0, g); return g; });
-  dinoG.scale.setScalar(1.15);
+  const bx = (w, h, d, m, x, y, z, parent) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); parent.add(o); return o; };
+  function makeDinoModel() {
+    const g = new THREE.Group(); scene.add(g);
+    const M_HEAD = dm(0x2f8f7a), eyeMat = new THREE.MeshBasicMaterial({ color: 0xffe040 });
+    bx(.26, .15, .15, M_BODY, 0, .27, 0, g); bx(.2, .06, .12, M_BELLY, .01, .2, 0, g);
+    bx(.12, .1, .11, M_HEAD, .15, .34, 0, g);
+    const head = new THREE.Group(); head.position.set(.2, .4, 0); g.add(head);
+    bx(.16, .09, .12, M_HEAD, .06, .02, 0, head); bx(.12, .012, .1, M_DARK, .07, -.03, 0, head);
+    for (let i = 0; i < 4; i++) { bx(.012, .02, .012, M_TOOTH, .02 + i * .03, -.035, .04, head); bx(.012, .02, .012, M_TOOTH, .02 + i * .03, -.035, -.04, head); }
+    const jaw = new THREE.Group(); jaw.position.set(-.01, -.04, 0); head.add(jaw);
+    bx(.14, .03, .1, M_HEAD, .08, -.01, 0, jaw); bx(.12, .01, .08, M_DARK, .08, .008, 0, jaw);
+    for (let i = 0; i < 3; i++) { bx(.012, .018, .012, M_TOOTH, .04 + i * .03, .014, .035, jaw); bx(.012, .018, .012, M_TOOTH, .04 + i * .03, .014, -.035, jaw); }
+    bx(.022, .022, .01, eyeMat, .06, .045, .061, head); bx(.022, .022, .01, eyeMat, .06, .045, -.061, head);
+    bx(.03, .03, .124, M_DARK, .055, .06, 0, head);
+    for (let i = 0; i < 5; i++) { const p = new THREE.Mesh(new THREE.ConeGeometry(.03, .07 - i * .006, 4), M_PLATE); p.position.set(.12 - i * .07, .37, 0); g.add(p); }
+    const tail = new THREE.Group(); tail.position.set(-.13, .28, 0); g.add(tail);
+    bx(.14, .09, .1, M_BODY, -.07, 0, 0, tail); bx(.12, .06, .07, M_BODY, -.19, -.02, 0, tail); bx(.1, .035, .045, M_BODY, -.29, -.035, 0, tail);
+    const armL = bx(.05, .02, .02, M_BODY, .12, .24, .08, g), armR = bx(.05, .02, .02, M_BODY, .12, .24, -.08, g);
+    const legs = [.07, -.07].map(z => { const lg = new THREE.Group(); lg.position.set(0, .22, z); g.add(lg);
+      bx(.07, .14, .06, M_BODY, 0, -.07, 0, lg); bx(.09, .025, .07, M_DARK, .02, -.2, 0, lg); bx(.045, .08, .05, M_BODY, .005, -.16, 0, lg); return lg; });
+    g.scale.setScalar(1.15);
+    return { g, head, jaw, tail, legs, armL, armR, eyeMat, M_HEAD };
+  }
+  // the little person who gets eaten in the catch scene
+  const human = new THREE.Group(); human.visible = false; scene.add(human);
+  { const skin = dm(0xf0c8a0), shirt = dm(0x2a6ad1), pants = dm(0x2a2e3a), hair = dm(0x3a2a1a);
+    bx(.035, .12, .035, pants, 0, .06, .025, human); bx(.035, .12, .035, pants, 0, .06, -.025, human);
+    bx(.05, .12, .09, shirt, 0, .18, 0, human);
+    const aL = bx(.025, .1, .025, shirt, 0, .19, .06, human), aR = bx(.025, .1, .025, shirt, 0, .19, -.06, human);
+    bx(.06, .06, .06, skin, 0, .27, 0, human); bx(.064, .02, .064, hair, 0, .305, 0, human);
+    human.userData.arms = [aL, aR]; }
 
-  const dino = { x: 0, z: 0, a: 0, y: 0, mode: "calm", lost: 0, seen: false, lastX: 0, lastZ: 0, dist: new Int32Array(W * H), target: -1, refresh: 0, stuck: 0, lastProg: 0, recent: [], hearT: 0, phase: 0, spd: 0, anger: 0, alertT: 0, calmSpd: .3 * PLAYER_SPEED, calmT: 0 };
-  function pickWander(nearX, nearZ) {
+  const dinos = [0, 1, 2].map(() => Object.assign(makeDinoModel(), {
+    x: 0, z: 0, a: 0, y: 0, mode: "calm", lost: 0, lastX: 0, lastZ: 0, dist: new Int32Array(W * H), target: -1, refresh: 0, stuck: 0, lastProg: 0,
+    recent: [], hearT: 0, phase: 0, spd: 0, anger: 0, alertT: 0, calmSpd: .3 * PLAYER_SPEED, calmT: 0, gruntT: rr(1, 6), growlT: 0 }));
+
+  function pickWander(d, nearX, nearZ) {
     for (let tries = 0; tries < 60; tries++) {
       let i;
-      if (nearX !== undefined) { i = nearestNav(idxOf(nearX + rr(-1, 1), nearZ + rr(-1, 1))); }
+      if (nearX !== undefined) i = nearestNav(idxOf(nearX + rr(-1, 1), nearZ + rr(-1, 1)));
       else i = navCells[Math.floor(rnd() * navCells.length)];
-      const tx = (i % W + .5) / K, tz = ((i / W | 0) + .5) / K;
+      const tx = cellX(i), tz = cellZ(i);
       if (nearX === undefined) {
-        if (Math.hypot(tx - dino.x, tz - dino.z) < 4) continue;
-        if (dino.recent.some(p => Math.hypot(tx - p[0], tz - p[1]) < 3)) continue;
+        if (Math.hypot(tx - d.x, tz - d.z) < 4) continue;
+        if (d.recent.some(p => Math.hypot(tx - p[0], tz - p[1]) < 3)) continue;
       }
-      field(i, dino.dist);
-      if (dino.dist[nearestNav(idxOf(dino.x, dino.z))] < 0) { nearX = undefined; continue; }
-      dino.target = i; dino.stuck = 0; dino.lastProg = dino.dist[nearestNav(idxOf(dino.x, dino.z))];
-      if (nearX === undefined) { dino.recent.push([tx, tz]); if (dino.recent.length > 6) dino.recent.shift(); }
+      field(i, d.dist);
+      if (d.dist[nearestNav(idxOf(d.x, d.z))] < 0) { nearX = undefined; continue; }
+      d.target = i; d.stuck = 0; d.lastProg = d.dist[nearestNav(idxOf(d.x, d.z))];
+      if (nearX === undefined) { d.recent.push([tx, tz]); if (d.recent.length > 6) d.recent.shift(); }
       return;
     }
   }
-  function spawnDino() {
-    const d0 = field(idxOf(SX, SZ), new Int32Array(W * H));
-    const far = navCells.filter(i => d0[i] > 160);
-    const i = far.length ? far[Math.floor(rnd() * far.length)] : navCells[0];
-    Object.assign(dino, { x: (i % W + .5) / K, z: ((i / W | 0) + .5) / K, a: rnd() * 6.28, mode: "calm", lost: 0, recent: [] });
-    pickWander();
+  // one always starts at the exit; the other two far from you and from each other
+  function spawnAll() {
+    const fromStart = field(idxOf(SX, SZ), new Int32Array(W * H));
+    dinos.forEach((d, k) => {
+      let i;
+      if (k === 0) i = nearestNav(idxOf(EX, EZ));
+      else { const far = navCells.filter(c => fromStart[c] > 160 && dinos.slice(0, k).every(o => Math.hypot(cellX(c) - o.x, cellZ(c) - o.z) > 6));
+        i = far.length ? far[Math.floor(rnd() * far.length)] : navCells[Math.floor(rnd() * navCells.length)]; }
+      Object.assign(d, { x: cellX(i), z: cellZ(i), a: rnd() * 6.28, y: 0, mode: "calm", lost: 0, recent: [], anger: 0, alertT: 0, spd: 0, calmT: 0 });
+      d.g.visible = true; pickWander(d);
+    });
   }
-  spawnDino();
+  spawnAll();
 
-  // sound: dinosaur steps and a roar, generated on the fly (starts after the first click)
-  let actx = null;
-  function audioInit() { try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); actx.resume && actx.resume(); } catch (e) { actx = null; } }
-  function thud(vol) {
-    if (!actx || vol < .02) return; const t = actx.currentTime, o = actx.createOscillator(), g = actx.createGain();
-    o.type = "sine"; o.frequency.setValueAtTime(90, t); o.frequency.exponentialRampToValueAtTime(40, t + .15);
-    g.gain.setValueAtTime(Math.min(.6, vol), t); g.gain.exponentialRampToValueAtTime(.001, t + .2); o.connect(g).connect(actx.destination); o.start(t); o.stop(t + .22);
+  // ---- sound, generated on the fly (starts after the first click) ----
+  let actx = null, master = null;
+  function audioInit() { try { if (!actx) { actx = new (window.AudioContext || window.webkitAudioContext)(); master = actx.createGain(); master.gain.value = .9; master.connect(actx.destination); } actx.resume && actx.resume(); } catch (e) { actx = null; } }
+  // loudness by distance: fades out completely by ~9 m; pan by direction relative to where you look
+  function spatial(d) {
+    const dx = d.x - st.x, dz = d.z - st.z, dist = Math.hypot(dx, dz);
+    const att = Math.max(0, 1 - dist / DINO.hearRange) ** 2;
+    const rel = Math.atan2(dz, dx) - st.a;
+    return { vol: att, pan: Math.max(-1, Math.min(1, Math.sin(rel))) };
   }
-  function roar(vol) {
-    if (!actx) return; const t = actx.currentTime, o = actx.createOscillator(), l = actx.createOscillator(), lg = actx.createGain(), g = actx.createGain(), f = actx.createBiquadFilter();
-    o.type = "sawtooth"; o.frequency.setValueAtTime(140, t); o.frequency.linearRampToValueAtTime(70, t + .9);
-    l.frequency.value = 28; lg.gain.value = 30; l.connect(lg).connect(o.frequency);
-    f.type = "lowpass"; f.frequency.value = 700;
-    g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(Math.min(.5, vol), t + .08); g.gain.exponentialRampToValueAtTime(.001, t + 1);
-    o.connect(f).connect(g).connect(actx.destination); o.start(t); l.start(t); o.stop(t + 1.05); l.stop(t + 1.05);
+  function outNode(vol, pan) {
+    const g = actx.createGain(); g.gain.value = vol;
+    if (actx.createStereoPanner) { const p = actx.createStereoPanner(); p.pan.value = pan; g.connect(p).connect(master); } else g.connect(master);
+    return g;
   }
+  function noiseBuf(len) { const b = actx.createBuffer(1, actx.sampleRate * len, actx.sampleRate), c = b.getChannelData(0); for (let i = 0; i < c.length; i++) c[i] = Math.random() * 2 - 1; return b; }
+  let NOISE = null;
+  function sStep(d) { if (!actx) return; const s = spatial(d); if (s.vol < .01) return;
+    const t = actx.currentTime, o = actx.createOscillator(), g = actx.createGain(); o.type = "sine";
+    o.frequency.setValueAtTime(85, t); o.frequency.exponentialRampToValueAtTime(38, t + .15);
+    g.gain.setValueAtTime(.55, t); g.gain.exponentialRampToValueAtTime(.001, t + .2); o.connect(g).connect(outNode(s.vol, s.pan)); o.start(t); o.stop(t + .22); }
+  function sGrunt(d) { if (!actx) return; const s = spatial(d); if (s.vol < .01) return;
+    const t = actx.currentTime, len = rr(.35, .7), o = actx.createOscillator(), l = actx.createOscillator(), lg = actx.createGain(), f = actx.createBiquadFilter(), g = actx.createGain();
+    o.type = "sawtooth"; const f0 = rr(55, 80); o.frequency.setValueAtTime(f0, t); o.frequency.linearRampToValueAtTime(f0 * rr(.75, 1.1), t + len);
+    l.frequency.value = rr(18, 30); lg.gain.value = 12; l.connect(lg).connect(o.frequency);
+    f.type = "lowpass"; f.frequency.value = 420; f.Q.value = 4;
+    g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(.35, t + .06); g.gain.exponentialRampToValueAtTime(.001, t + len);
+    o.connect(f).connect(g).connect(outNode(s.vol, s.pan)); o.start(t); l.start(t); o.stop(t + len + .05); l.stop(t + len + .05); }
+  function sScream(d) { if (!actx) return; const s = spatial(d); const vol = Math.max(.25, s.vol);
+    const t = actx.currentTime, o = actx.createOscillator(), o2 = actx.createOscillator(), v = actx.createOscillator(), vg = actx.createGain(), f = actx.createBiquadFilter(), g = actx.createGain();
+    o.type = "sawtooth"; o2.type = "square";
+    for (const [osc, m] of [[o, 1], [o2, 1.51]]) { osc.frequency.setValueAtTime(300 * m, t); osc.frequency.exponentialRampToValueAtTime(900 * m, t + .35); osc.frequency.exponentialRampToValueAtTime(420 * m, t + 1.3); }
+    v.frequency.value = 9; vg.gain.value = 40; v.connect(vg); vg.connect(o.frequency); vg.connect(o2.frequency);
+    f.type = "bandpass"; f.frequency.value = 1100; f.Q.value = 1.2;
+    g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(.4, t + .08); g.gain.setValueAtTime(.4, t + .9); g.gain.exponentialRampToValueAtTime(.001, t + 1.4);
+    o.connect(f); o2.connect(f); f.connect(g).connect(outNode(vol, s.pan)); [o, o2, v].forEach(x => { x.start(t); x.stop(t + 1.45); }); }
+  function sGrowl(d) { if (!actx) return; const s = spatial(d); if (s.vol < .01) return;
+    NOISE = NOISE || noiseBuf(2);
+    const t = actx.currentTime, len = rr(.8, 1.2), n = actx.createBufferSource(), f = actx.createBiquadFilter(), o = actx.createOscillator(), l = actx.createOscillator(), lg = actx.createGain(), g = actx.createGain(), am = actx.createGain();
+    n.buffer = NOISE; f.type = "lowpass"; f.frequency.value = 380; f.Q.value = 6;
+    o.type = "sawtooth"; o.frequency.setValueAtTime(70, t); o.frequency.linearRampToValueAtTime(52, t + len);
+    l.frequency.value = 22; lg.gain.value = .5; am.gain.value = .5; l.connect(lg).connect(am.gain);
+    g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(.5, t + .1); g.gain.exponentialRampToValueAtTime(.001, t + len);
+    n.connect(f); o.connect(f); f.connect(am).connect(g).connect(outNode(s.vol, s.pan));
+    [n, o, l].forEach(x => { x.start(t); x.stop(t + len + .05); }); }
+  function sChomp() { if (!actx) return; NOISE = NOISE || noiseBuf(2); const t = actx.currentTime, n = actx.createBufferSource(), f = actx.createBiquadFilter(), g = actx.createGain();
+    n.buffer = NOISE; f.type = "bandpass"; f.frequency.value = 900; g.gain.setValueAtTime(.6, t); g.gain.exponentialRampToValueAtTime(.001, t + .12); n.connect(f).connect(g).connect(master); n.start(t); n.stop(t + .15); }
+  // a short sad tune in D minor
+  function sTragic() { if (!actx) return; const t0 = actx.currentTime + .05, bus = actx.createGain(); bus.gain.setValueAtTime(.0001, t0); bus.gain.exponentialRampToValueAtTime(.35, t0 + .3); bus.gain.setValueAtTime(.35, t0 + 4.2); bus.gain.exponentialRampToValueAtTime(.001, t0 + 5.2); bus.connect(master);
+    const hz = n => 440 * Math.pow(2, (n - 69) / 12);
+    const mel = [[62, 0, .6], [65, .6, .6], [64, 1.2, .5], [62, 1.7, .4], [61, 2.1, .9], [57, 3.0, .5], [58, 3.5, .5], [57, 4.0, 1.1]];
+    for (const [n, st0, len] of mel) { const o = actx.createOscillator(), g = actx.createGain(); o.type = "triangle"; o.frequency.value = hz(n);
+      const s = t0 + st0; g.gain.setValueAtTime(.0001, s); g.gain.exponentialRampToValueAtTime(.5, s + .05); g.gain.exponentialRampToValueAtTime(.001, s + len + .3); o.connect(g).connect(bus); o.start(s); o.stop(s + len + .35); }
+    for (const [n, st0, len] of [[[38, 45, 50], 0, 2.1], [[37, 45, 49], 2.1, .9], [[34, 41, 50], 3.0, 1.0], [[38, 45, 50], 4.0, 1.2]]) for (const nn of n) {
+      const o = actx.createOscillator(), f = actx.createBiquadFilter(), g = actx.createGain(); o.type = "sawtooth"; o.frequency.value = hz(nn); f.type = "lowpass"; f.frequency.value = 500;
+      const s = t0 + st0; g.gain.setValueAtTime(.0001, s); g.gain.exponentialRampToValueAtTime(.12, s + .2); g.gain.exponentialRampToValueAtTime(.001, s + len + .2); o.connect(f).connect(g).connect(bus); o.start(s); o.stop(s + len + .25); } }
 
-  const dangerEl = document.getElementById("danger"), caughtEl = document.getElementById("caught");
+  const dangerEl = document.getElementById("danger"), caughtEl = document.getElementById("caught"), fadeEl = document.getElementById("fade");
   let caughtT = 0;
-  function dinoUpdate(dt, playerMoving) {
-    const dx = st.x - dino.x, dz = st.z - dino.z, dPl = Math.hypot(dx, dz);
-    // vision: ±45° cone, walls block it; a moving player in view makes it angry
-    let ang = Math.atan2(dz, dx) - dino.a; ang = Math.atan2(Math.sin(ang), Math.cos(ang));
-    const inCone = Math.abs(ang) <= DINO.fov && dPl < DINO.view && lineOfSight(dino.x, dino.z, st.x, st.z);
-    if (dino.mode === "calm" && inCone && playerMoving) { dino.mode = "alert"; dino.alertT = 0; }
-    // alert: it stops, stares at you and works itself up for 2 seconds
-    if (dino.mode === "alert") {
-      if (inCone) { dino.alertT += dt; dino.lastX = st.x; dino.lastZ = st.z; }
-      else { dino.alertT -= dt * .7; if (dino.alertT <= 0) { dino.alertT = 0; dino.mode = "calm"; } }
-      if (dino.alertT >= 2) { dino.mode = "chase"; dino.lost = 0; dino.refresh = 0; roar(.5 / Math.max(1, dPl * .5)); }
+
+  function dinoUpdate(d, dt, playerMoving) {
+    const dx = st.x - d.x, dz = st.z - d.z, dPl = Math.hypot(dx, dz);
+    let ang = Math.atan2(dz, dx) - d.a; ang = Math.atan2(Math.sin(ang), Math.cos(ang));
+    const inCone = Math.abs(ang) <= DINO.fov && dPl < DINO.view && lineOfSight(d.x, d.z, st.x, st.z);
+    if (d.mode === "calm" && inCone && playerMoving) { d.mode = "alert"; d.alertT = 0; sScream(d); }
+    if (d.mode === "alert") {
+      if (inCone) { d.alertT += dt; d.lastX = st.x; d.lastZ = st.z; }
+      else { d.alertT -= dt * .7; if (d.alertT <= 0) { d.alertT = 0; d.mode = "calm"; } }
+      if (d.alertT >= 2) { d.mode = "chase"; d.lost = 0; d.refresh = 0; d.growlT = 0; }
     }
-    if (dino.mode === "chase") {
-      if (inCone) { dino.lost = 0; dino.lastX = st.x; dino.lastZ = st.z; }
-      else { dino.lost += dt; if (dino.lost >= DINO.forget) { dino.mode = "calm"; pickWander(); } }
-      dino.refresh -= dt;
-      if (dino.mode === "chase" && dino.refresh <= 0) { field(idxOf(dino.lastX, dino.lastZ), dino.dist); dino.refresh = .25; }
-    } else if (dino.mode === "calm") {
-      // footsteps pull it toward the sound, without making it angry
-      dino.hearT -= dt;
-      if (playerMoving && st.ground && dPl < DINO.hear && dino.hearT <= 0) { pickWander(st.x, st.z); dino.hearT = 1.2; }
+    if (d.mode === "chase") {
+      if (inCone) { d.lost = 0; d.lastX = st.x; d.lastZ = st.z; }
+      else { d.lost += dt; if (d.lost >= DINO.forget) { d.mode = "calm"; pickWander(d); } }
+      d.refresh -= dt;
+      if (d.mode === "chase" && d.refresh <= 0) { field(idxOf(d.lastX, d.lastZ), d.dist); d.refresh = .25; }
+      d.growlT -= dt; if (d.growlT <= 0) { sGrowl(d); d.growlT = rr(1, 1.6); }
+    } else if (d.mode === "calm") {
+      d.hearT -= dt;
+      if (playerMoving && st.ground && dPl < DINO.hear && d.hearT <= 0) { pickWander(d, st.x, st.z); d.hearT = 1.2; }
+      d.gruntT -= dt; if (d.gruntT <= 0) { sGrunt(d); d.gruntT = rr(3, 8); }
     }
-    // steer along the distance field
-    const here = nearestNav(idxOf(dino.x, dino.z));
-    // walk down the field up to 10 cells and aim at the farthest one reachable in a straight line
+    const here = nearestNav(idxOf(d.x, d.z));
     let cur = here, step = here;
     for (let s = 0; s < 10; s++) {
-      let best = step, bd = dino.dist[step]; const c = step % W;
+      let best = step, bd = d.dist[step]; const c = step % W;
       for (const n of [step - 1, step + 1, step - W, step + W]) {
-        if (n < 0 || n >= W * H || Math.abs((n % W) - c) > 1) continue; const dn = dino.dist[n]; if (dn >= 0 && dn < bd) { bd = dn; best = n; } }
+        if (n < 0 || n >= W * H || Math.abs((n % W) - c) > 1) continue; const dn = d.dist[n]; if (dn >= 0 && dn < bd) { bd = dn; best = n; } }
       if (best === step) break; step = best;
-      if (s === 0 || navLine(dino.x, dino.z, (step % W + .5) / K, ((step / W | 0) + .5) / K)) cur = step;
+      if (s === 0 || navLine(d.x, d.z, cellX(step), cellZ(step))) cur = step;
     }
     let tx, tz;
-    const chasingClose = dino.mode === "chase" && dPl < 1 && lineOfSight(dino.x, dino.z, st.x, st.z);
-    if (chasingClose || dino.mode === "alert") { tx = st.x; tz = st.z; }
-    else if (cur !== here) { tx = (cur % W + .5) / K; tz = ((cur / W | 0) + .5) / K; }
-    else if (dino.mode === "chase") { tx = dino.lastX; tz = dino.lastZ; }
-    else { dino.stuck += 1; tx = dino.x + Math.cos(dino.a); tz = dino.z + Math.sin(dino.a); }
-    let want = Math.atan2(tz - dino.z, tx - dino.x), diff = Math.atan2(Math.sin(want - dino.a), Math.cos(want - dino.a));
-    const turnRate = dino.mode === "calm" ? 3 : 5;
-    dino.a += Math.max(-turnRate * dt, Math.min(turnRate * dt, diff));
-    // calm pace drifts between standing still and half the player's speed
-    dino.calmT -= dt;
-    if (dino.calmT <= 0) { dino.calmT = rr(2, 6); dino.calmSpd = rnd() < .25 ? 0 : rr(.1, .5) * PLAYER_SPEED; }
-    // anything that isn't a wall under or just ahead of it slows the chase hard
+    const chasingClose = d.mode === "chase" && dPl < 1 && lineOfSight(d.x, d.z, st.x, st.z);
+    if (chasingClose || d.mode === "alert") { tx = st.x; tz = st.z; }
+    else if (cur !== here) { tx = cellX(cur); tz = cellZ(cur); }
+    else if (d.mode === "chase") { tx = d.lastX; tz = d.lastZ; }
+    else { d.stuck += 1; tx = d.x + Math.cos(d.a); tz = d.z + Math.sin(d.a); }
+    const want = Math.atan2(tz - d.z, tx - d.x), diff = Math.atan2(Math.sin(want - d.a), Math.cos(want - d.a));
+    const turnRate = d.mode === "calm" ? 3 : 5;
+    d.a += Math.max(-turnRate * dt, Math.min(turnRate * dt, diff));
+    d.calmT -= dt;
+    if (d.calmT <= 0) { d.calmT = rr(2, 6); d.calmSpd = rnd() < .25 ? 0 : rr(.1, .5) * PLAYER_SPEED; }
     const isProp = (x, z) => { const h = collH[idxOf(x, z)]; return h > 0 && h < WALLH; };
-    const onProp = isProp(dino.x, dino.z) || isProp(dino.x + Math.cos(dino.a) * .12, dino.z + Math.sin(dino.a) * .12);
-    let target = dino.mode === "chase" ? ((Math.abs(diff) > .35 || onProp) ? DINO.chaseSlow : DINO.chaseFast) : dino.mode === "alert" ? 0 : dino.calmSpd;
+    const onProp = isProp(d.x, d.z) || isProp(d.x + Math.cos(d.a) * .12, d.z + Math.sin(d.a) * .12);
+    let target = d.mode === "chase" ? ((Math.abs(diff) > .35 || onProp) ? DINO.chaseSlow : DINO.chaseFast) : d.mode === "alert" ? 0 : d.calmSpd;
     if (Math.abs(diff) > 1.4) target *= .3;
-    if (dino.mode === "chase" && onProp && dino.spd > DINO.chaseSlow) dino.spd = DINO.chaseSlow;
-    dino.spd += (target - dino.spd) * Math.min(1, dt * 6);
-    const sp = dino.spd * dt, nx = dino.x + Math.cos(dino.a) * sp, nz = dino.z + Math.sin(dino.a) * sp;
+    if (d.mode === "chase" && onProp && d.spd > DINO.chaseSlow) d.spd = DINO.chaseSlow;
+    d.spd += (target - d.spd) * Math.min(1, dt * 6);
+    const sp = d.spd * dt, nx = d.x + Math.cos(d.a) * sp, nz = d.z + Math.sin(d.a) * sp;
     const free = (x, z) => nav[idxOf(x, z)] === 1;
-    const ox = dino.x, oz = dino.z;
-    if (free(nx, dino.z)) dino.x = nx; if (free(dino.x, nz)) dino.z = nz;
-    const moved = Math.hypot(dino.x - ox, dino.z - oz);
-    // wandering: new goal when reached or stuck
-    if (dino.mode === "calm") {
-      const dHere = dino.dist[nearestNav(idxOf(dino.x, dino.z))];
-      if (dHere >= 0 && dHere < 4) pickWander();
-      if (dino.calmSpd > .05) dino.stuck += dt; if (dHere >= 0 && dHere < dino.lastProg - 3) { dino.lastProg = dHere; dino.stuck = 0; }
-      if (dino.stuck > 4) pickWander();
+    const ox = d.x, oz = d.z;
+    if (free(nx, d.z)) d.x = nx; if (free(d.x, nz)) d.z = nz;
+    const moved = Math.hypot(d.x - ox, d.z - oz);
+    if (d.mode === "calm") {
+      const dHere = d.dist[nearestNav(idxOf(d.x, d.z))];
+      if (dHere >= 0 && dHere < 4) pickWander(d);
+      if (d.calmSpd > .05) d.stuck += dt; if (dHere >= 0 && dHere < d.lastProg - 3) { d.lastProg = dHere; d.stuck = 0; }
+      if (d.stuck > 4) pickWander(d);
     }
-    // climb over props
-    const ph = collH[idxOf(dino.x, dino.z)], gy = ph > 0 && ph < WALLH ? ph : 0;
-    dino.y += (gy - dino.y) * Math.min(1, dt * 8);
-    // animation + steps
-    const prevPhase = dino.phase; dino.phase += moved * 22;
-    legs[0].rotation.z = Math.sin(dino.phase) * .6; legs[1].rotation.z = -Math.sin(dino.phase) * .6;
-    tail.rotation.y = Math.sin(dino.phase * .5) * .25; head.rotation.z = dino.anger * .15 + (dino.mode === "chase" ? Math.sin(performance.now() * .02) * .05 : Math.sin(dino.phase * .5) * .05);
-    const angerTarget = dino.mode === "chase" ? 1 : dino.mode === "alert" ? Math.min(1, dino.alertT / 2) : 0;
-    dino.anger += (angerTarget - dino.anger) * Math.min(1, dt * (angerTarget > dino.anger ? 8 : 1.2));
-    jaw.rotation.z = -dino.anger * .75; armL.rotation.z = armR.rotation.z = Math.sin(dino.phase) * .4;
-    if (Math.floor(prevPhase / Math.PI) !== Math.floor(dino.phase / Math.PI)) thud(.5 / Math.max(1, dPl * dPl * .4));
-    eyeMat.color.setRGB(1, .88 - dino.anger * .72, .25 - dino.anger * .15);
-    M_HEAD.color.setRGB(.184 + dino.anger * .37, .561 - dino.anger * .5, .478 - dino.anger * .41);
-    dinoG.position.set(dino.x, dino.y + Math.abs(Math.sin(dino.phase)) * .012, dino.z); dinoG.rotation.y = -dino.a;
-    dangerEl.style.opacity = dino.mode === "chase" ? (dino.lost > 0 ? .35 : .75) : dino.anger * .4;
-    // caught (you can escape by being high in a jump)
-    if (dPl < DINO.catchR && st.y < .22) caught();
+    const ph = collH[idxOf(d.x, d.z)], gy = ph > 0 && ph < WALLH ? ph : 0;
+    d.y += (gy - d.y) * Math.min(1, dt * 8);
+    const prevPhase = d.phase; d.phase += moved * 22;
+    if (Math.floor(prevPhase / Math.PI) !== Math.floor(d.phase / Math.PI)) sStep(d);
+    const angerTarget = d.mode === "chase" ? 1 : d.mode === "alert" ? Math.min(1, d.alertT / 2) : 0;
+    d.anger += (angerTarget - d.anger) * Math.min(1, dt * (angerTarget > d.anger ? 8 : 1.2));
+    poseDino(d, d.mode === "chase" ? Math.sin(performance.now() * .02) * .05 : Math.sin(d.phase * .5) * .05);
+    if (dPl < DINO.catchR && st.y < .22) startCatch(d);
   }
-  function caught() {
-    caughtEl.hidden = false; caughtT = 2;
-    restart(); spawnDino();
+  function poseDino(d, headWobble) {
+    d.legs[0].rotation.z = Math.sin(d.phase) * .6; d.legs[1].rotation.z = -Math.sin(d.phase) * .6;
+    d.tail.rotation.y = Math.sin(d.phase * .5) * .25; d.head.rotation.z = d.anger * .15 + headWobble;
+    d.jaw.rotation.z = -d.anger * .75; d.armL.rotation.z = d.armR.rotation.z = Math.sin(d.phase) * .4;
+    d.eyeMat.color.setRGB(1, .88 - d.anger * .72, .25 - d.anger * .15);
+    d.M_HEAD.color.setRGB(.184 + d.anger * .37, .561 - d.anger * .5, .478 - d.anger * .41);
+    d.g.position.set(d.x, d.y + Math.abs(Math.sin(d.phase)) * .012, d.z); d.g.rotation.y = -d.a;
+  }
+  function dinosUpdate(dt, playerMoving) {
+    for (const d of dinos) { dinoUpdate(d, dt, playerMoving); if (cut) return; }
+    let danger = 0; for (const d of dinos) danger = Math.max(danger, d.mode === "chase" ? (d.lost > 0 ? .35 : .75) : d.anger * .4);
+    dangerEl.style.opacity = danger;
+  }
+
+  // ---- the catch: a 5-second scene of the dinosaur eating the little person ----
+  let cut = null;
+  function startCatch(d) {
+    st.running = false;
+    const hx = st.x, hz = st.z, face = Math.atan2(d.z - hz, d.x - hx);
+    // place the dinosaur just in front of the person, facing them
+    const px = hx + Math.cos(face) * .3, pz = hz + Math.sin(face) * .3;
+    Object.assign(d, { x: px, z: pz, a: face + Math.PI, anger: 1 });
+    human.position.set(hx, 0, hz); human.rotation.set(0, -face, 0); human.scale.setScalar(1); human.visible = true;
+    // pick a camera spot that can see both
+    const mx = (hx + px) / 2, mz = (hz + pz) / 2; let cam = null;
+    for (const off of [Math.PI / 2, -Math.PI / 2, Math.PI, Math.PI * .75, -Math.PI * .75, Math.PI / 4, -Math.PI / 4]) {
+      for (const r of [.9, .7, .5]) { const ca = face + off, cx = mx + Math.cos(ca) * r, cz = mz + Math.sin(ca) * r;
+        if (!bits[idxOf(cx, cz)] && lineOfSight(cx, cz, hx, hz) && lineOfSight(cx, cz, px, pz)) { cam = { ang: ca, r }; break; } }
+      if (cam) break;
+    }
+    cut = { t: 0, d, hx, hz, mx, mz, cam: cam || { ang: face + Math.PI, r: .35 }, chomps: 0, face };
+    dangerEl.style.opacity = .6; sTragic(); sScream(d);
+  }
+  function updateCatch(dt) {
+    const c = cut, d = c.d; c.t += dt; const t = c.t;
+    let rear = 0, lunge = 0, jawOpen = 1;
+    if (t < 1.2) { rear = t / 1.2; jawOpen = t / 1.2; }
+    else if (t < 1.6) { const k = (t - 1.2) / .4; rear = 1 - k * 1.6; lunge = k; jawOpen = 1 - k; }
+    else if (t < 3.6) { rear = -.6 + Math.sin(t * 9) * .15; lunge = 1; jawOpen = .25 + .25 * Math.sin(t * 14); }
+    else { const k = Math.min(1, (t - 3.6) / .8); rear = -.6 + k * 1.4; lunge = 1 - k * .4; jawOpen = k * .9; }
+    const back = Math.cos(c.face), backz = Math.sin(c.face);
+    d.x = c.hx + back * (.3 - lunge * .12); d.z = c.hz + backz * (.3 - lunge * .12);
+    d.anger = 1; poseDino(d, 0); d.head.rotation.z = rear * .6; d.jaw.rotation.z = -jawOpen * .9;
+    d.g.position.y = Math.max(0, Math.sin(Math.min(1, t) * Math.PI) * .03);
+    // the person: waves arms, then is snatched into the mouth
+    const arms = human.userData.arms; arms[0].rotation.x = Math.sin(t * 18) * 1.2; arms[1].rotation.x = -Math.sin(t * 18) * 1.2;
+    if (t > 1.3 && t < 1.8) { const k = (t - 1.3) / .5; human.position.set(c.hx + back * .12 * k, .25 * k, c.hz + backz * .12 * k); human.scale.setScalar(1 - k * .7); human.rotation.z = k * 1.2; }
+    if (t >= 1.8) human.visible = false;
+    if (t > 1.5 && c.chomps < 5 && t > 1.5 + c.chomps * .4) { c.chomps++; sChomp(); }
+    // camera slowly circles the scene
+    const ca = c.cam.ang + t * .12, r = c.cam.r;
+    let cx = c.mx + Math.cos(ca) * r, cz = c.mz + Math.sin(ca) * r;
+    if (bits[idxOf(cx, cz)]) { cx = c.mx + Math.cos(c.cam.ang) * r; cz = c.mz + Math.sin(c.cam.ang) * r; }
+    const shake = t > 1.4 && t < 3.6 ? (Math.random() - .5) * .01 : 0;
+    camera.position.set(cx + shake, .45 + shake, cz); camera.lookAt(c.mx, .28, c.mz);
+    fadeEl.style.opacity = t > 3.8 ? Math.min(1, (t - 3.8) / 1) : 0;
+    if (t > 3.9) caughtEl.hidden = false;
+    if (t >= 5) { cut = null; human.visible = false; restart(); spawnAll(); caughtT = 1.2; fadeEl.style.opacity = 0; }
   }
 
   // ---------- minimap ----------
@@ -972,7 +1072,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     }
     mg.putImageData(mimg, 0, 0);
     if (st.rev[((MAZE.exit[1] / REV) | 0) * RW + ((MAZE.exit[0] / REV) | 0)]) { mg.fillStyle = "#1b6fd1"; mg.font = "bold 22px sans-serif"; mg.textAlign = "center"; mg.textBaseline = "middle"; mg.fillText("E", EX * K, EZ * K); }
-    mg.fillStyle = dino.mode === "chase" ? "#ff2a1a" : dino.mode === "alert" ? "#ff9a2a" : "#2f8f7a"; mg.beginPath(); mg.arc(dino.x * K, dino.z * K, 5, 0, 7); mg.fill();
+    for (const d of dinos) { mg.fillStyle = d.mode === "chase" ? "#ff2a1a" : d.mode === "alert" ? "#ff9a2a" : "#2f8f7a"; mg.beginPath(); mg.arc(d.x * K, d.z * K, 5, 0, 7); mg.fill(); }
     mg.save(); mg.translate(st.x * K, st.z * K); mg.rotate(st.a);
     mg.fillStyle = "#d1321b"; mg.beginPath(); mg.moveTo(9, 0); mg.lineTo(-6, -6); mg.lineTo(-6, 6); mg.closePath(); mg.fill();
     mg.restore();
@@ -1000,8 +1100,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     update(dt); blendEnv(dt); updateTorches(now);
     landBob *= Math.exp(-dt * 10);
     const y = EYE + st.y - landBob + (reduce || !st.ground ? 0 : Math.sin(bob) * .015);
-    camera.position.set(st.x, y, st.z);
-    camera.lookAt(st.x + Math.cos(st.a), y + Math.tan(pitch), st.z + Math.sin(st.a));
+    if (!cut) { camera.position.set(st.x, y, st.z); camera.lookAt(st.x + Math.cos(st.a), y + Math.tan(pitch), st.z + Math.sin(st.a)); }
     torch.position.set(st.x + Math.cos(st.a) * .1, .5 + st.y, st.z + Math.sin(st.a) * .1);
     torch.intensity = env.torch * (1 + (reduce ? 0 : Math.sin(now * .013) * .05 + Math.sin(now * .029) * .04));
     // compass: north is the top of the drawing (−z); the dial turns so your facing direction is at the top
