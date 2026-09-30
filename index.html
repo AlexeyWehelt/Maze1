@@ -730,7 +730,8 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
       const sp = 1.5 * dt * fwd, dx = Math.cos(st.a) * sp, dz = Math.sin(st.a) * sp, ox = st.x, oz = st.z;
       if (!blocked(st.x + dx, st.z, st.y)) st.x += dx;
       if (!blocked(st.x, st.z + dz, st.y)) st.z += dz;
-      const m = Math.hypot(st.x - ox, st.z - oz); st.d += m; bob += m * 11;
+      const m = Math.hypot(st.x - ox, st.z - oz), prevBob = bob; st.d += m; bob += m * 11;
+      if (st.ground && Math.floor(prevBob / Math.PI) !== Math.floor(bob / Math.PI)) playerStep();
       moving = m > 1e-4;
       reveal();
     }
@@ -739,7 +740,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     const prevY = st.y;
     st.vy -= GRAV * dt; st.y += st.vy * dt;
     const gnd = groundAt(st.x, st.z, prevY);
-    if (st.y <= gnd) { if (st.vy < -1.2) landBob = Math.min(.05, -st.vy * .012); st.y = gnd; st.vy = 0; st.ground = true; } else st.ground = false;
+    if (st.y <= gnd) { if (st.vy < -1.2) { landBob = Math.min(.05, -st.vy * .012); playerStep(1.8); } st.y = gnd; st.vy = 0; st.ground = true; } else st.ground = false;
     // zone change with a short hold so borders don't flicker
     const b = zoneAt(st.x, st.z);
     if (b !== curZone) { if (b === pendingZone) { zoneHold += dt; if (zoneHold > .35) { curZone = b; if (!st.lands.includes(b)) st.lands.push(b); } } else { pendingZone = b; zoneHold = 0; } }
@@ -870,52 +871,113 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
   spawnAll();
 
   // ---- sound, generated on the fly (starts after the first click) ----
-  let actx = null, master = null;
-  function audioInit() { try { if (!actx) { actx = new (window.AudioContext || window.webkitAudioContext)(); master = actx.createGain(); master.gain.value = .9; master.connect(actx.destination); } actx.resume && actx.resume(); } catch (e) { actx = null; } }
-  // loudness by distance: fades out completely by ~9 m; pan by direction relative to where you look
+  let actx = null, master = null, reverb = null, NOISE = null, RATTLE = null, SHAPE_SOFT = null, SHAPE_HARD = null;
+  function makeIR(sec) {
+    const len = Math.floor(actx.sampleRate * sec), b = actx.createBuffer(2, len, actx.sampleRate);
+    for (let ch = 0; ch < 2; ch++) { const c = b.getChannelData(ch); for (let i = 0; i < len; i++) c[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3.2); }
+    return b;
+  }
+  function noiseBuf(len) { const b = actx.createBuffer(1, Math.floor(actx.sampleRate * len), actx.sampleRate), c = b.getChannelData(0); for (let i = 0; i < c.length; i++) c[i] = Math.random() * 2 - 1; return b; }
+  // irregular throat flutter: a random value that jumps 20–45 times a second, smoothed
+  function rattleBuf(len) {
+    const sr = actx.sampleRate, b = actx.createBuffer(1, Math.floor(sr * len), sr), c = b.getChannelData(0);
+    let v = 0, target = 0, next = 0;
+    for (let i = 0; i < c.length; i++) { if (i >= next) { target = Math.random() * 2 - 1; next = i + sr / (20 + Math.random() * 25); } v += (target - v) * .02; c[i] = v; }
+    return b;
+  }
+  function shaper(k) { const n = 1024, curve = new Float32Array(n); for (let i = 0; i < n; i++) { const x = i / (n - 1) * 2 - 1; curve[i] = Math.tanh(k * x) / Math.tanh(k); } const s = actx.createWaveShaper(); s.curve = curve; return s; }
+  function audioInit() {
+    try {
+      if (!actx) {
+        actx = new (window.AudioContext || window.webkitAudioContext)();
+        master = actx.createGain(); master.gain.value = .9; master.connect(actx.destination);
+        reverb = actx.createConvolver(); reverb.buffer = makeIR(1.6); const rg = actx.createGain(); rg.gain.value = .35; reverb.connect(rg).connect(master);
+        NOISE = noiseBuf(3); RATTLE = rattleBuf(3);
+      }
+      actx.resume && actx.resume();
+    } catch (e) { actx = null; }
+  }
+  // how many walls stand between a dinosaur and you
+  function wallsBetween(x1, z1, x2, z2) {
+    const n = Math.ceil(Math.hypot(x2 - x1, z2 - z1) * K * 2); let inWall = false, count = 0;
+    for (let i = 1; i < n; i++) { const t = i / n, w = bits[idxOf(x1 + (x2 - x1) * t, z1 + (z2 - z1) * t)] === 1; if (w && !inWall) count++; inWall = w; }
+    return count;
+  }
+  // loudness fades out by ~9 m; each wall in between cuts it hard and muffles it
   function spatial(d) {
     const dx = d.x - st.x, dz = d.z - st.z, dist = Math.hypot(dx, dz);
-    const att = Math.max(0, 1 - dist / DINO.hearRange) ** 2;
-    const rel = Math.atan2(dz, dx) - st.a;
-    return { vol: att, pan: Math.max(-1, Math.min(1, Math.sin(rel))) };
+    let vol = Math.max(0, 1 - dist / DINO.hearRange) ** 2;
+    const walls = vol > .005 ? wallsBetween(st.x, st.z, d.x, d.z) : 0;
+    vol *= Math.pow(.14, walls);
+    return { vol, pan: Math.max(-1, Math.min(1, Math.sin(Math.atan2(dz, dx) - st.a))) * .8, walls };
   }
-  function outNode(vol, pan) {
-    const g = actx.createGain(); g.gain.value = vol;
-    if (actx.createStereoPanner) { const p = actx.createStereoPanner(); p.pan.value = pan; g.connect(p).connect(master); } else g.connect(master);
+  function outNode(vol, pan, walls, wet = .35) {
+    const g = actx.createGain(); g.gain.value = vol; let tail = g;
+    if (walls > 0) { const lp = actx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = walls > 1 ? 180 : 320; lp.Q.value = .5; tail.connect(lp); tail = lp; }
+    if (actx.createStereoPanner) { const p = actx.createStereoPanner(); p.pan.value = pan; tail.connect(p); tail = p; }
+    tail.connect(master);
+    const send = actx.createGain(); send.gain.value = walls > 0 ? wet * 1.6 : wet; tail.connect(send).connect(reverb);
     return g;
   }
-  function noiseBuf(len) { const b = actx.createBuffer(1, actx.sampleRate * len, actx.sampleRate), c = b.getChannelData(0); for (let i = 0; i < c.length; i++) c[i] = Math.random() * 2 - 1; return b; }
-  let NOISE = null;
-  function sStep(d) { if (!actx) return; const s = spatial(d); if (s.vol < .01) return;
-    const t = actx.currentTime, o = actx.createOscillator(), g = actx.createGain(); o.type = "sine";
-    o.frequency.setValueAtTime(85, t); o.frequency.exponentialRampToValueAtTime(38, t + .15);
-    g.gain.setValueAtTime(.55, t); g.gain.exponentialRampToValueAtTime(.001, t + .2); o.connect(g).connect(outNode(s.vol, s.pan)); o.start(t); o.stop(t + .22); }
-  function sGrunt(d) { if (!actx) return; const s = spatial(d); if (s.vol < .01) return;
-    const t = actx.currentTime, len = rr(.35, .7), o = actx.createOscillator(), l = actx.createOscillator(), lg = actx.createGain(), f = actx.createBiquadFilter(), g = actx.createGain();
-    o.type = "sawtooth"; const f0 = rr(55, 80); o.frequency.setValueAtTime(f0, t); o.frequency.linearRampToValueAtTime(f0 * rr(.75, 1.1), t + len);
-    l.frequency.value = rr(18, 30); lg.gain.value = 12; l.connect(lg).connect(o.frequency);
-    f.type = "lowpass"; f.frequency.value = 420; f.Q.value = 4;
-    g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(.35, t + .06); g.gain.exponentialRampToValueAtTime(.001, t + len);
-    o.connect(f).connect(g).connect(outNode(s.vol, s.pan)); o.start(t); l.start(t); o.stop(t + len + .05); l.stop(t + len + .05); }
-  function sScream(d) { if (!actx) return; const s = spatial(d); const vol = Math.max(.25, s.vol);
-    const t = actx.currentTime, o = actx.createOscillator(), o2 = actx.createOscillator(), v = actx.createOscillator(), vg = actx.createGain(), f = actx.createBiquadFilter(), g = actx.createGain();
-    o.type = "sawtooth"; o2.type = "square";
-    for (const [osc, m] of [[o, 1], [o2, 1.51]]) { osc.frequency.setValueAtTime(300 * m, t); osc.frequency.exponentialRampToValueAtTime(900 * m, t + .35); osc.frequency.exponentialRampToValueAtTime(420 * m, t + 1.3); }
-    v.frequency.value = 9; vg.gain.value = 40; v.connect(vg); vg.connect(o.frequency); vg.connect(o2.frequency);
-    f.type = "bandpass"; f.frequency.value = 1100; f.Q.value = 1.2;
-    g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(.4, t + .08); g.gain.setValueAtTime(.4, t + .9); g.gain.exponentialRampToValueAtTime(.001, t + 1.4);
-    o.connect(f); o2.connect(f); f.connect(g).connect(outNode(vol, s.pan)); [o, o2, v].forEach(x => { x.start(t); x.stop(t + 1.45); }); }
-  function sGrowl(d) { if (!actx) return; const s = spatial(d); if (s.vol < .01) return;
-    NOISE = NOISE || noiseBuf(2);
-    const t = actx.currentTime, len = rr(.8, 1.2), n = actx.createBufferSource(), f = actx.createBiquadFilter(), o = actx.createOscillator(), l = actx.createOscillator(), lg = actx.createGain(), g = actx.createGain(), am = actx.createGain();
-    n.buffer = NOISE; f.type = "lowpass"; f.frequency.value = 380; f.Q.value = 6;
-    o.type = "sawtooth"; o.frequency.setValueAtTime(70, t); o.frequency.linearRampToValueAtTime(52, t + len);
-    l.frequency.value = 22; lg.gain.value = .5; am.gain.value = .5; l.connect(lg).connect(am.gain);
-    g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(.5, t + .1); g.gain.exponentialRampToValueAtTime(.001, t + len);
-    n.connect(f); o.connect(f); f.connect(am).connect(g).connect(outNode(s.vol, s.pan));
-    [n, o, l].forEach(x => { x.start(t); x.stop(t + len + .05); }); }
-  function sChomp() { if (!actx) return; NOISE = NOISE || noiseBuf(2); const t = actx.currentTime, n = actx.createBufferSource(), f = actx.createBiquadFilter(), g = actx.createGain();
-    n.buffer = NOISE; f.type = "bandpass"; f.frequency.value = 900; g.gain.setValueAtTime(.6, t); g.gain.exponentialRampToValueAtTime(.001, t + .12); n.connect(f).connect(g).connect(master); n.start(t); n.stop(t + .15); }
+  const aenv = (g, t, a, peak, hold, rel) => { g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + a); g.gain.setValueAtTime(peak, t + a + hold); g.gain.exponentialRampToValueAtTime(.0001, t + a + hold + rel); };
+  function noiseSrc(t, dur) { const n = actx.createBufferSource(); n.buffer = NOISE; n.start(t, Math.random() * 2, dur + .05); return n; }
+  function rattleSrc(t, dur) { const n = actx.createBufferSource(); n.buffer = RATTLE; n.start(t, Math.random() * 2, dur + .05); return n; }
+  function band(f, q) { const b = actx.createBiquadFilter(); b.type = "bandpass"; b.frequency.value = f; b.Q.value = q; return b; }
+  // a throaty voice: detuned saws through vocal-tract formants, with flutter and breath
+  function voice({ out, t, dur, f0, contour, formants, flutter, breath, drive, vib }) {
+    const mix = actx.createGain(), am = actx.createGain(), sh = shaper(drive), body = actx.createGain();
+    am.gain.value = 1 - flutter * .5;
+    const rat = rattleSrc(t, dur), rg = actx.createGain(); rg.gain.value = flutter * .5; rat.connect(rg).connect(am.gain);
+    for (const det of [1, 1.013, .987]) {
+      const o = actx.createOscillator(); o.type = "sawtooth";
+      o.frequency.setValueAtTime(f0 * det, t); for (const [k, m] of contour) o.frequency.linearRampToValueAtTime(f0 * m * det, t + dur * k);
+      if (vib) { const vr = rattleSrc(t, dur), vg = actx.createGain(); vg.gain.value = f0 * vib; vr.connect(vg).connect(o.frequency); }
+      o.connect(mix); o.start(t); o.stop(t + dur + .05);
+    }
+    mix.gain.value = .33; mix.connect(am).connect(sh);
+    for (const [f, q, g] of formants) { const b = band(f, q), bg = actx.createGain(); bg.gain.value = g; sh.connect(b).connect(bg).connect(body); }
+    if (breath) { const n = noiseSrc(t, dur), b = band(breath[0], .7), bg = actx.createGain(); bg.gain.value = breath[1]; n.connect(b).connect(bg); bg.connect(am); bg.connect(body); }
+    aenv(body, t, Math.min(.12, dur * .2), 1, dur * .45, dur * .45); body.connect(out);
+  }
+  function sStep(d) { if (!actx) return; const s = spatial(d); if (s.vol < .008) return;
+    const t = actx.currentTime + Math.random() * .02, out = outNode(s.vol * rr(.8, 1.1), s.pan, s.walls, .25);
+    const o = actx.createOscillator(), og = actx.createGain(); o.type = "sine"; o.frequency.setValueAtTime(rr(62, 75), t); o.frequency.exponentialRampToValueAtTime(28, t + .25);
+    aenv(og, t, .008, .7, 0, .28); o.connect(og).connect(out); o.start(t); o.stop(t + .32);
+    const n = noiseSrc(t, .2), lp = actx.createBiquadFilter(), ng = actx.createGain(); lp.type = "lowpass"; lp.frequency.value = 220; aenv(ng, t, .005, .6, 0, .16); n.connect(lp).connect(ng).connect(out);
+    const n2 = noiseSrc(t + .03, .06), hp = band(rr(1800, 3200), 1.5), ng2 = actx.createGain(); aenv(ng2, t + .03, .003, .05, 0, .05); n2.connect(hp).connect(ng2).connect(out); }
+  function sGrunt(d) { if (!actx) return; const s = spatial(d); if (s.vol < .008) return;
+    const t = actx.currentTime, dur = rr(.45, 1.1), out = outNode(s.vol * .9, s.pan, s.walls, .3);
+    voice({ out, t, dur, f0: rr(42, 60), contour: [[.3, rr(1.05, 1.2)], [1, rr(.7, .9)]], formants: [[rr(200, 260), 3, 1], [rr(550, 700), 5, .5], [1200, 6, .12]], flutter: rr(.5, .9), breath: [500, .25], drive: 2.5 });
+    if (rnd() < .5) { const n = noiseSrc(t + dur * .9, .35), b = band(700, .6), g = actx.createGain(); aenv(g, t + dur * .9, .03, .15, .05, .25); n.connect(b).connect(g).connect(out); } }
+  function sScream(d) { if (!actx) return; const s = spatial(d); const vol = Math.max(.2, s.vol);
+    const t = actx.currentTime, dur = rr(1.3, 1.7), out = outNode(vol, s.pan, s.walls, .55);
+    voice({ out, t, dur, f0: rr(150, 190), contour: [[.2, 2.8], [.45, 3.1], [.8, 2.2], [1, 1.4]], formants: [[850, 2, 1], [1700, 3, .7], [2800, 4, .35]], flutter: .35, breath: [1600, .5], drive: 6, vib: .04 });
+    voice({ out, t, dur: dur * .9, f0: rr(70, 85), contour: [[.3, 1.4], [1, .9]], formants: [[300, 3, .6]], flutter: .7, drive: 4 }); }
+  function sGrowl(d) { if (!actx) return; const s = spatial(d); if (s.vol < .008) return;
+    const t = actx.currentTime, dur = rr(.9, 1.5), out = outNode(s.vol, s.pan, s.walls, .3);
+    voice({ out, t, dur, f0: rr(34, 46), contour: [[.25, 1.25], [.7, 1.1], [1, .8]], formants: [[rr(160, 220), 2.5, 1.2], [rr(420, 520), 4, .6], [900, 5, .2]], flutter: .95, breath: [350, .5], drive: 5 }); }
+  function sChomp() { if (!actx) return; const t = actx.currentTime, out = outNode(.9, 0, 0, .2);
+    const n = noiseSrc(t, .12), b = band(rr(700, 1100), 1.2), g = actx.createGain(); aenv(g, t, .003, .8, 0, .1); n.connect(b).connect(g).connect(out);
+    const o = actx.createOscillator(), og = actx.createGain(); o.frequency.setValueAtTime(120, t); o.frequency.exponentialRampToValueAtTime(50, t + .1); aenv(og, t, .003, .5, 0, .1); o.connect(og).connect(out); o.start(t); o.stop(t + .15); }
+  // your own footsteps: the sound depends on the ground under you
+  const STEP_SOUND = [
+    { f: 2400, q: .6, dur: .09, vol: .12 },            // jungle grass
+    { f: 3400, q: .9, dur: .07, vol: .12, tick: 1 },   // bamboo litter
+    { f: 4200, q: .4, dur: .13, vol: .14, grit: 1 },   // sand
+    { f: 1300, q: 2, dur: .05, vol: .16, thump: 1 },   // stone slabs
+    { f: 900, q: 8, dur: .12, vol: .1, ring: 1 },      // scrap metal
+    { f: 500, q: .8, dur: .12, vol: .14 },             // soft moss
+    { f: 1100, q: 2, dur: .05, vol: .15, thump: 1, wet: .6 } // cave rock
+  ];
+  function playerStep(loud = 1) {
+    if (!actx) return; const sp = STEP_SOUND[biomeAt(st.x, st.z)], t = actx.currentTime, out = outNode(sp.vol * loud * rr(.8, 1.15), rr(-.1, .1), 0, sp.wet || .12);
+    const n = noiseSrc(t, sp.dur), b = band(sp.f * rr(.85, 1.15), sp.q), g = actx.createGain(); aenv(g, t, .004, 1, 0, sp.dur); n.connect(b).connect(g).connect(out);
+    if (sp.grit) for (let i = 0; i < 4; i++) { const tt = t + rnd() * sp.dur, n2 = noiseSrc(tt, .01), g2 = actx.createGain(); aenv(g2, tt, .001, .6, 0, .01); n2.connect(band(5000, 2)).connect(g2).connect(out); }
+    if (sp.tick) { const n2 = noiseSrc(t + .02, .02), g2 = actx.createGain(); aenv(g2, t + .02, .001, .7, 0, .02); n2.connect(band(6000, 3)).connect(g2).connect(out); }
+    if (sp.thump || loud > 1) { const o = actx.createOscillator(), og = actx.createGain(); o.frequency.setValueAtTime(110, t); o.frequency.exponentialRampToValueAtTime(55, t + .06); aenv(og, t, .003, .5 * loud, 0, .07); o.connect(og).connect(out); o.start(t); o.stop(t + .1); }
+    if (sp.ring) { const o = actx.createOscillator(), og = actx.createGain(); o.type = "square"; o.frequency.value = rr(700, 1100); aenv(og, t, .002, .08, 0, .18); o.connect(band(1400, 6)).connect(og).connect(out); o.start(t); o.stop(t + .22); }
+  }
+
   // a short sad tune in D minor
   function sTragic() { if (!actx) return; const t0 = actx.currentTime + .05, bus = actx.createGain(); bus.gain.setValueAtTime(.0001, t0); bus.gain.exponentialRampToValueAtTime(.35, t0 + .3); bus.gain.setValueAtTime(.35, t0 + 4.2); bus.gain.exponentialRampToValueAtTime(.001, t0 + 5.2); bus.connect(master);
     const hz = n => 440 * Math.pow(2, (n - 69) / 12);
