@@ -26,7 +26,7 @@ body { background: #1a1d14; color: var(--ink); font-family: var(--body); font-si
 #view { position: absolute; inset: 0; }
 #view canvas { display: block; width: 100%; height: 100%; }
 .hud { position: absolute; top: 12px; left: 16px; right: 16px; display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; pointer-events: none; }
-.stat { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px; display: flex; flex-wrap: wrap; gap: 6px 16px; font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 14px; }
+.stat { pointer-events: auto; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; touch-action: manipulation; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px; display: flex; flex-wrap: wrap; gap: 6px 16px; font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 14px; }
 .stat b { color: #5d634d; font-weight: 400; font-family: var(--body); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; margin-right: 6px; }
 .stat em { font-style: normal; }
 #mini { background: var(--paper); border: 1px solid var(--line); border-radius: 4px; width: 180px; max-width: 36vw; box-shadow: 0 3px 10px rgba(0,0,0,.35); transform: rotate(1.2deg); }
@@ -499,6 +499,9 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
       if (i >= 0 && j >= 0 && i < RW && j < RH && (i - cx) ** 2 + (j - cz) ** 2 <= R * R) st.rev[j * RW + i] = 1;
   }
 
+  // secret map toggle: double M on a keyboard, double tap on the timer panel on a phone
+  function secretTap() { const now = performance.now(); if (now - lastM < 400) { showMap = !showMap; mini.hidden = !showMap; if (showMap) drawMini(); lastM = 0; } else lastM = now; }
+  document.querySelector(".stat").addEventListener("pointerdown", e => { e.preventDefault(); secretTap(); });
   const keys = {}, move = { f: false, b: false, l: false, r: false };
   addEventListener("keydown", e => {
     const k = e.key.toLowerCase();
@@ -506,7 +509,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     keys[k] = true;
     if (k === " " && !e.repeat && st.running) jumpQueued = .15;
     // secret: press M twice quickly to toggle the map
-    if ((k === "m" || k === "ь") && !e.repeat) { const now = performance.now(); if (now - lastM < 400) { showMap = !showMap; mini.hidden = !showMap; if (showMap) drawMini(); lastM = 0; } else lastM = now; }
+    if ((k === "m" || k === "ь") && !e.repeat) secretTap();
     if ((k === "r" || k === "к") && !e.repeat) restart();
     if (k === "enter") { if (!intro.hidden) begin(); else if (!win.hidden) restart(); }
   });
