@@ -65,7 +65,7 @@ button { font: inherit; cursor: pointer; }
       <span><b>Путь</b><em id="dist">0 м</em></span>
       <span><b>Земли</b><em id="lands">1/7</em></span>
     </div>
-    <canvas id="mini" aria-label="Мини-карта"></canvas>
+    <canvas id="mini" aria-label="Мини-карта" hidden></canvas>
   </div>
   <div class="pad" aria-label="Управление">
     <button class="up" data-k="f" aria-label="Вперёд">▲</button>
@@ -85,7 +85,6 @@ button { font: inherit; cursor: pointer; }
         <span><kbd>A</kbd> <kbd>D</kbd> / <kbd>←</kbd> <kbd>→</kbd></span><span>поворот</span>
         <span>мышь</span><span>зажмите и тяните, чтобы осмотреться</span>
         <span><kbd>Пробел</kbd></span><span>прыжок через любые предметы на дороге; на низкие можно запрыгнуть</span>
-        <span><kbd>M</kbd></span><span>скрыть или показать карту</span>
         <span>телефон</span><span>кнопки внизу (⤒ — прыжок) и свайп по экрану</span>
       </div>
       <button class="go" id="start">Войти</button>
@@ -465,7 +464,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
   let startAngle = 0, bestRun = -1;
   for (let i = 0; i < 32; i++) { const a = i / 32 * Math.PI * 2; let d = 0; while (d < 6 && !wallAt(Math.floor((SX + Math.cos(a) * d) * K), Math.floor((SZ + Math.sin(a) * d) * K))) d += .05; if (d > bestRun) { bestRun = d; startAngle = a; } }
   function fresh() { return { y: 0, vy: 0, ground: true, x: SX, z: SZ, a: startAngle, t: 0, d: 0, running: false, won: false, rev: new Uint8Array(RW * RH), lands: [0] }; }
-  let st = fresh(), showMap = true;
+  let st = fresh(), showMap = false, lastM = 0;
 
   // Anything taller than your feet (plus a small step) blocks you; lower things can be jumped onto
   const STEP = .035, JUMP_V = 2.8, GRAV = 9;
@@ -506,7 +505,8 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     if (["arrowup", "arrowdown", "arrowleft", "arrowright", " "].includes(k)) e.preventDefault();
     keys[k] = true;
     if (k === " " && !e.repeat && st.running) jumpQueued = .15;
-    if (k === "m" || k === "ь") { showMap = !showMap; mini.hidden = !showMap; }
+    // secret: press M twice quickly to toggle the map
+    if ((k === "m" || k === "ь") && !e.repeat) { const now = performance.now(); if (now - lastM < 400) { showMap = !showMap; mini.hidden = !showMap; if (showMap) drawMini(); lastM = 0; } else lastM = now; }
     if ((k === "r" || k === "к") && !e.repeat) restart();
     if (k === "enter") { if (!intro.hidden) begin(); else if (!win.hidden) restart(); }
   });
