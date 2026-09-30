@@ -1,3 +1,8 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Лабиринт со стикера</title>
 <style>
 /* Layout: full-screen first-person view; HUD strip on top, zone name centered, minimap top-right, touch pad bottom. Single look by choice: sticky-note lime + graphite UI over a multi-biome 3D world. */
@@ -13,7 +18,9 @@
   --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
   color-scheme: light;
 }
-html, body { height: 100%; }
+[hidden] { display: none !important; }
+*, *::before, *::after { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
 body { background: #1a1d14; color: var(--ink); font-family: var(--body); font-size: 15px; overflow: hidden; }
 #game { position: relative; width: 100%; height: 100%; overflow: hidden; touch-action: none; }
 #view { position: absolute; inset: 0; }
@@ -44,7 +51,10 @@ button { font: inherit; cursor: pointer; }
 @media (hover: hover) and (pointer: fine) { .pad { display: none; } }
 @media (max-width: 480px) { .restart { bottom: calc(150px + env(safe-area-inset-bottom, 0px)); } }
 </style>
+
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@700&family=Nunito:wght@400;700&family=JetBrains+Mono&display=swap">
+</head>
+<body>
 
 <div id="game">
   <div id="view"></div>
@@ -631,3 +641,6 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
   window.claude?.hot?.ready ? window.claude.hot.ready(boot) : boot(window.claude?.hot?.data ?? {});
 })();
 </script>
+
+</body>
+</html>
