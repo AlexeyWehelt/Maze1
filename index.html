@@ -56,7 +56,7 @@ button { font: inherit; cursor: pointer; }
 .pad button { background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; font-size: 22px; user-select: none; -webkit-user-select: none; touch-action: none; }
 .pad button.on { background: var(--paper); }
 .pad .up { grid-column: 2; grid-row: 1; } .pad .lt { grid-column: 1; grid-row: 2; }
-.pad .dn { grid-column: 2; grid-row: 2; } .pad .rt { grid-column: 3; grid-row: 2; } .pad .jp { grid-column: 3; grid-row: 1; }
+.pad .dn { grid-column: 2; grid-row: 2; } .pad .rt { grid-column: 3; grid-row: 2; }
 .restart { position: absolute; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px; font-size: 13px; }
 @media (hover: hover) and (pointer: fine) { .pad { display: none; } }
 @media (max-width: 480px) { .restart { bottom: calc(150px + env(safe-area-inset-bottom, 0px)); } }
@@ -100,7 +100,6 @@ button { font: inherit; cursor: pointer; }
     <button class="lt" data-k="l" aria-label="Повернуть налево">⟲</button>
     <button class="dn" data-k="b" aria-label="Назад">▼</button>
     <button class="rt" data-k="r" aria-label="Повернуть направо">⟳</button>
-    <button class="jp" data-k="j" aria-label="Прыжок">⤒</button>
   </div>
   <button class="restart" id="restart">Заново <kbd>R</kbd></button>
 
@@ -112,8 +111,8 @@ button { font: inherit; cursor: pointer; }
         <span><kbd>W</kbd> <kbd>S</kbd> / <kbd>↑</kbd> <kbd>↓</kbd></span><span>вперёд и назад</span>
         <span><kbd>A</kbd> <kbd>D</kbd> / <kbd>←</kbd> <kbd>→</kbd></span><span>поворот</span>
         <span>мышь</span><span>зажмите и тяните, чтобы осмотреться</span>
-        <span><kbd>Пробел</kbd></span><span>прыжок через любые предметы на дороге; на низкие можно запрыгнуть</span>
-        <span>телефон</span><span>кнопки внизу (⤒ — прыжок) и свайп по экрану</span>
+        <span>прыжки</span><span>сами: набегите на предмет — и перепрыгнете его</span>
+        <span>телефон</span><span>кнопки внизу и свайп по экрану</span>
       </div>
       <button class="go" id="start">Войти</button>
     </div>
@@ -682,7 +681,6 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     const k = e.key.toLowerCase();
     if (["arrowup", "arrowdown", "arrowleft", "arrowright", " "].includes(k)) e.preventDefault();
     keys[k] = true;
-    if (k === " " && !e.repeat && st.running) jumpQueued = .15;
     // secret: press M twice quickly to toggle the map
     if ((k === "m" || k === "ь") && !e.repeat) secretTap();
     if ((k === "r" || k === "к") && !e.repeat && !cut) { restart(); spawnAll(); }
@@ -692,7 +690,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
   addEventListener("blur", () => { for (const k in keys) keys[k] = false; });
   document.querySelectorAll(".pad button").forEach(b => {
     const k = b.dataset.k;
-    const on = e => { e.preventDefault(); if (k === "j") { if (st.running) jumpQueued = .15; b.classList.add("on"); return; } move[k] = true; b.classList.add("on"); };
+    const on = e => { e.preventDefault(); move[k] = true; b.classList.add("on"); };
     const off = () => { move[k] = false; b.classList.remove("on"); };
     b.addEventListener("pointerdown", on); b.addEventListener("pointerup", off);
     b.addEventListener("pointerleave", off); b.addEventListener("pointercancel", off);
@@ -728,6 +726,9 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     const fwd = (keys["arrowup"] || keys["w"] || keys["ц"] || move.f ? 1 : 0) - (keys["arrowdown"] || keys["s"] || keys["ы"] || move.b ? 1 : 0);
     if (fwd) {
       const sp = 1.5 * dt * fwd, dx = Math.cos(st.a) * sp, dz = Math.sin(st.a) * sp, ox = st.x, oz = st.z;
+      // automatic jump: running into anything that isn't a wall hops over it
+      const px = st.x + Math.cos(st.a) * fwd * (RAD + .07), pz = st.z + Math.sin(st.a) * fwd * (RAD + .07);
+      if (st.ground && hitProp(px, pz, st.y) && !hitWall(px, pz)) { st.vy = JUMP_V; st.ground = false; }
       if (!blocked(st.x + dx, st.z, st.y)) st.x += dx;
       if (!blocked(st.x, st.z + dz, st.y)) st.z += dz;
       const m = Math.hypot(st.x - ox, st.z - oz), prevBob = bob; st.d += m; bob += m * 11;
@@ -858,6 +859,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
   }
   // one always starts at the exit; the other two far from you and from each other
   function spawnAll() {
+    dinos.forEach(d => { if (d.gv) stopGrowl(d); });
     const fromStart = field(idxOf(SX, SZ), new Int32Array(W * H));
     dinos.forEach((d, k) => {
       let i;
@@ -949,13 +951,46 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     const t = actx.currentTime, dur = rr(.45, 1.1), out = outNode(s.vol * .9, s.pan, s.walls, .3);
     voice({ out, t, dur, f0: rr(42, 60), contour: [[.3, rr(1.05, 1.2)], [1, rr(.7, .9)]], formants: [[rr(200, 260), 3, 1], [rr(550, 700), 5, .5], [1200, 6, .12]], flutter: rr(.5, .9), breath: [500, .25], drive: 2.5 });
     if (rnd() < .5) { const n = noiseSrc(t + dur * .9, .35), b = band(700, .6), g = actx.createGain(); aenv(g, t + dur * .9, .03, .15, .05, .25); n.connect(b).connect(g).connect(out); } }
-  function sScream(d) { if (!actx) return; const s = spatial(d); const vol = Math.max(.2, s.vol);
-    const t = actx.currentTime, dur = rr(1.3, 1.7), out = outNode(vol, s.pan, s.walls, .55);
-    voice({ out, t, dur, f0: rr(150, 190), contour: [[.2, 2.8], [.45, 3.1], [.8, 2.2], [1, 1.4]], formants: [[850, 2, 1], [1700, 3, .7], [2800, 4, .35]], flutter: .35, breath: [1600, .5], drive: 6, vib: .04 });
-    voice({ out, t, dur: dur * .9, f0: rr(70, 85), contour: [[.3, 1.4], [1, .9]], formants: [[300, 3, .6]], flutter: .7, drive: 4 }); }
-  function sGrowl(d) { if (!actx) return; const s = spatial(d); if (s.vol < .008) return;
-    const t = actx.currentTime, dur = rr(.9, 1.5), out = outNode(s.vol, s.pan, s.walls, .3);
-    voice({ out, t, dur, f0: rr(34, 46), contour: [[.25, 1.25], [.7, 1.1], [1, .8]], formants: [[rr(160, 220), 2.5, 1.2], [rr(420, 520), 4, .6], [900, 5, .2]], flutter: .95, breath: [350, .5], drive: 5 }); }
+  // the scream when it spots you: a sharp inhale, a tearing screech over a deep roar, and a chest-thump
+  function sScream(d) { if (!actx) return; const s = spatial(d); const vol = Math.min(1.3, Math.max(.4, s.vol * 1.4) * Math.pow(.25, s.walls));
+    const t = actx.currentTime, out = outNode(vol, s.pan, s.walls, .7), half = actx.createGain(); half.gain.value = .55; half.connect(out);
+    const n = noiseSrc(t, .4), bp = band(500, 1.2), ng = actx.createGain(); bp.frequency.setValueAtTime(400, t); bp.frequency.exponentialRampToValueAtTime(2200, t + .35); aenv(ng, t, .15, .35, .1, .12); n.connect(bp).connect(ng).connect(out);
+    const t1 = t + .32, dur = rr(1.9, 2.3);
+    voice({ out, t: t1, dur, f0: rr(165, 195), contour: [[.1, 3.7], [.28, 3.3], [.5, 2.5], [.66, 3.0], [.85, 2.2], [1, 1.3]], formants: [[950, 1.5, 1], [2000, 2.5, .85], [3300, 4, .5]], flutter: .6, breath: [2400, 1], drive: 14, vib: .07 });
+    voice({ out: half, t: t1 + .03, dur: dur * .95, f0: rr(230, 260), contour: [[.12, 3.2], [.4, 2.9], [.8, 2.0], [1, 1.2]], formants: [[1300, 2, 1], [2600, 3, .6]], flutter: .7, breath: [3500, .6], drive: 16, vib: .09 });
+    voice({ out, t: t1, dur: dur * .9, f0: rr(48, 58), contour: [[.2, 1.7], [.6, 1.3], [1, .75]], formants: [[210, 2, 1.4], [520, 3, .8]], flutter: .95, breath: [400, .6], drive: 9 });
+    const o = actx.createOscillator(), og = actx.createGain(); o.frequency.setValueAtTime(58, t1); o.frequency.exponentialRampToValueAtTime(28, t1 + .5); aenv(og, t1, .01, 1, .05, .5); o.connect(og).connect(out); o.start(t1); o.stop(t1 + .6); }
+  // continuous chase growl: always on while it hunts you; loudness, brightness and side tell you how close it is
+  function startGrowl(d) {
+    if (!actx || d.gv) return;
+    const t = actx.currentTime, out = actx.createGain(); out.gain.value = .0001;
+    const lp = actx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 800; lp.Q.value = .7;
+    out.connect(lp); let tail = lp, pan = null;
+    if (actx.createStereoPanner) { pan = actx.createStereoPanner(); tail.connect(pan); tail = pan; }
+    tail.connect(master); const send = actx.createGain(); send.gain.value = .3; tail.connect(send).connect(reverb);
+    const nodes = [], sum = actx.createGain(); sum.gain.value = .33;
+    const wander = actx.createOscillator(), wg = actx.createGain(); wander.frequency.value = .23; wg.gain.value = 5; wander.connect(wg); nodes.push(wander);
+    for (const f of [37, 37.6, 36.4]) { const o = actx.createOscillator(); o.type = "sawtooth"; o.frequency.value = f; wg.connect(o.frequency); o.connect(sum); nodes.push(o); }
+    const am = actx.createGain(); am.gain.value = .5; const rat = actx.createBufferSource(); rat.buffer = RATTLE; rat.loop = true; const rg = actx.createGain(); rg.gain.value = .5; rat.connect(rg).connect(am.gain); nodes.push(rat);
+    const pump = actx.createGain(); pump.gain.value = .65; const br = actx.createOscillator(), bg = actx.createGain(); br.frequency.value = .6; bg.gain.value = .35; br.connect(bg).connect(pump.gain); nodes.push(br);
+    const nz = actx.createBufferSource(); nz.buffer = NOISE; nz.loop = true; const nb = band(320, .8), nzg = actx.createGain(); nzg.gain.value = .6; nz.connect(nb).connect(nzg).connect(am); nodes.push(nz);
+    const sh = shaper(7); sum.connect(am).connect(pump).connect(sh);
+    for (const [f, q, g] of [[180, 2.5, 1.3], [440, 4, .8], [950, 5, .3], [1900, 6, .12]]) { const b = band(f, q), gg = actx.createGain(); gg.gain.value = g; sh.connect(b).connect(gg).connect(out); }
+    nodes.forEach(n => n.start(t));
+    d.gv = { out, lp, pan, nodes };
+  }
+  function updateGrowl(d) {
+    if (!d.gv) return; const t = actx.currentTime, dx = d.x - st.x, dz = d.z - st.z, dist = Math.hypot(dx, dz);
+    const walls = wallsBetween(st.x, st.z, d.x, d.z), near = Math.max(0, 1 - dist / 16);
+    const vol = Math.max(.07, Math.pow(near, 1.3) * 1.25) * Math.pow(.3, walls);
+    d.gv.out.gain.setTargetAtTime(vol, t, .12);
+    d.gv.lp.frequency.setTargetAtTime(walls ? 260 : 300 + 3200 * near * near, t, .12);
+    if (d.gv.pan) d.gv.pan.pan.setTargetAtTime(Math.max(-1, Math.min(1, Math.sin(Math.atan2(dz, dx) - st.a))) * .85, t, .1);
+  }
+  function stopGrowl(d) {
+    if (!d.gv) return; const g = d.gv, t = actx.currentTime; d.gv = null;
+    g.out.gain.cancelScheduledValues(t); g.out.gain.setTargetAtTime(.0001, t, .15); g.nodes.forEach(n => { try { n.stop(t + .8); } catch (e) {} });
+  }
   function sChomp() { if (!actx) return; const t = actx.currentTime, out = outNode(.9, 0, 0, .2);
     const n = noiseSrc(t, .12), b = band(rr(700, 1100), 1.2), g = actx.createGain(); aenv(g, t, .003, .8, 0, .1); n.connect(b).connect(g).connect(out);
     const o = actx.createOscillator(), og = actx.createGain(); o.frequency.setValueAtTime(120, t); o.frequency.exponentialRampToValueAtTime(50, t + .1); aenv(og, t, .003, .5, 0, .1); o.connect(og).connect(out); o.start(t); o.stop(t + .15); }
@@ -1006,7 +1041,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
       else { d.lost += dt; if (d.lost >= DINO.forget) { d.mode = "calm"; pickWander(d); } }
       d.refresh -= dt;
       if (d.mode === "chase" && d.refresh <= 0) { field(idxOf(d.lastX, d.lastZ), d.dist); d.refresh = .25; }
-      d.growlT -= dt; if (d.growlT <= 0) { sGrowl(d); d.growlT = rr(1, 1.6); }
+      if (d.mode === "chase") { startGrowl(d); updateGrowl(d); } else stopGrowl(d);
     } else if (d.mode === "calm") {
       d.hearT -= dt;
       if (playerMoving && st.ground && dPl < DINO.hear && d.hearT <= 0) { pickWander(d, st.x, st.z); d.hearT = 1.2; }
@@ -1076,6 +1111,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
   let cut = null;
   function startCatch(d) {
     st.running = false;
+    dinos.forEach(d => { if (d.gv) stopGrowl(d); });
     const hx = st.x, hz = st.z, face = Math.atan2(d.z - hz, d.x - hx);
     // place the dinosaur just in front of the person, facing them
     const px = hx + Math.cos(face) * .3, pz = hz + Math.sin(face) * .3;
