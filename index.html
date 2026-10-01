@@ -939,11 +939,11 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
   const M_TOOTH2 = new THREE.MeshStandardMaterial({ color: 0xf6eed6, roughness: .35 }), M_CLAW2 = new THREE.MeshStandardMaterial({ color: 0x24201c, roughness: .4 });
   const M_PLATE2 = new THREE.MeshStandardMaterial({ color: 0xf08a2a, roughness: .55, emissive: 0x2a0e00 });
   const BODY = [
-    [-.66, .17, .006, .008, 1], [-.56, .2, .022, .026, 1], [-.44, .235, .04, .045, 1.05], [-.31, .27, .062, .07, 1.1],
-    [-.18, .3, .088, .095, 1.2], [-.06, .315, .1, .11, 1.35], [.05, .315, .102, .112, 1.4], [.13, .33, .085, .1, 1.25],
-    [.19, .37, .06, .07, 1.1], [.23, .43, .047, .052, 1.05], [.255, .49, .043, .046, 1]];
-  const HEAD = [[-.035, .0, .04, .046, .6], [.0, .01, .056, .062, .55], [.05, .008, .057, .056, .5], [.1, .0, .047, .045, .45], [.15, -.005, .038, .034, .42], [.195, -.008, .026, .024, .4], [.215, -.008, .008, .009, .4]];
-  const JAW = [[-.02, -.012, .036, .016, 1], [.04, -.016, .046, .02, 1.1], [.1, -.017, .041, .018, 1.1], [.15, -.015, .033, .014, 1.1], [.195, -.012, .022, .01, 1], [.21, -.011, .006, .005, 1]];
+    [-.6, .2, .006, .008, 1], [-.5, .22, .026, .03, 1], [-.38, .25, .048, .054, 1.05], [-.26, .28, .074, .082, 1.1],
+    [-.14, .31, .096, .108, 1.15], [-.04, .34, .108, .122, 1.25], [.05, .385, .102, .116, 1.25], [.11, .445, .086, .096, 1.15],
+    [.15, .505, .072, .076, 1.05], [.175, .56, .064, .064, 1]];
+  const HEAD = [[-.035, 0, .046, .054, .7], [0, .012, .062, .07, .65], [.05, .012, .062, .066, .6], [.1, .006, .056, .058, .55], [.15, 0, .05, .05, .5], [.185, -.004, .042, .04, .5], [.2, -.006, .012, .014, .5]];
+  const JAW = [[-.02, -.014, .04, .02, 1], [.04, -.02, .052, .026, 1.1], [.1, -.02, .049, .024, 1.1], [.15, -.018, .042, .02, 1.1], [.185, -.015, .032, .014, 1], [.198, -.014, .008, .006, 1]];
   const BR = 46, BS = 20;
   const sample = (PROF, x) => { let best = null, bd = 1e9; for (let i = 0; i <= 60; i++) { const c = catmull(PROF, i / 60), dd = Math.abs(c[0] - x); if (dd < bd) { bd = dd; best = c; } } return best; };
   function makeDinoModel() {
@@ -954,52 +954,52 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     const plates = [];
     const plateShape = new THREE.Shape(); plateShape.moveTo(-.5, 0); plateShape.quadraticCurveTo(-.45, .7, 0, 1); plateShape.quadraticCurveTo(.45, .7, .5, 0); plateShape.lineTo(-.5, 0);
     const plateGeo = new THREE.ExtrudeGeometry(plateShape, { depth: .12, bevelEnabled: true, bevelThickness: .05, bevelSize: .05, bevelSegments: 1 }); plateGeo.translate(0, 0, -.06);
-    for (let i = 0; i < 12; i++) { const u = .16 + i * .062, big = Math.sin(Math.min(1, (u - .1) / .72) * Math.PI);
+    for (let i = 0; i < 0; i++) { const u = .16 + i * .062, big = Math.sin(Math.min(1, (u - .1) / .72) * Math.PI);
       const m = new THREE.Mesh(plateGeo, M_PLATE2); const sz = .025 + big * .05; m.scale.set(sz * .9, sz, .05); g.add(m); plates.push({ m, r: Math.round(u * (BR - 1)) }); }
     // head
-    const head = new THREE.Group(); g.add(head);
+    const head = new THREE.Group(); head.scale.setScalar(1.45); g.add(head);
     const M_HEAD = skinMat(), M_HEAD2 = new THREE.MeshStandardMaterial({ color: SKIN.base.clone(), bumpMap: scaleTex, bumpScale: .007, roughness: .7 });
     const headGeo = staticTube(HEAD, 26, 18, (col, u, sn) => { mixc(col, SKIN.base, SKIN.belly, (-.3 - sn) * 2.5); if (sn > .3 && Math.random() < .12) col.lerp(SKIN.spot, .5); col.offsetHSL(0, 0, (Math.random() - .5) * .04); });
     head.add(new THREE.Mesh(headGeo, M_HEAD));
-    const mouth = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 8), M_GUMS); mouth.scale.set(.1, .018, .04); mouth.position.set(.1, -.022, 0); head.add(mouth);
+    const mouth = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 8), M_GUMS); mouth.scale.set(.095, .02, .045); mouth.position.set(.095, -.026, 0); head.add(mouth);
     const toothGeo = new THREE.ConeGeometry(.0055, .024, 5);
-    for (let i = 0; i < 9; i++) { const x = .02 + i * .021, c = sample(HEAD, x), big = i === 7 ? 1.5 : 1;
+    for (let i = 0; i < 9; i++) { const x = .02 + i * .02, c = sample(HEAD, x), big = (i === 6 || i === 3) ? 1.4 : 1;
       for (const sz of [1, -1]) { const t = new THREE.Mesh(toothGeo, M_TOOTH2); t.position.set(x, c[1] - c[3] * c[4] - .006, sz * c[2] * .8); t.rotation.x = Math.PI; t.scale.setScalar(big * (1 - i * .03)); head.add(t); } }
     // eyes with slit pupils, lids for blinking, brow ridges and small horns
     const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffe040 }), M_PUPIL = new THREE.MeshBasicMaterial({ color: 0x080808 });
     const lids = [], eyes = [];
     for (const sz of [1, -1]) {
-      const e = new THREE.Mesh(new THREE.SphereGeometry(.016, 14, 10), eyeMat); e.position.set(.035, .03, sz * .05); e.scale.set(1, .85, .7); head.add(e);
-      const p = new THREE.Mesh(new THREE.SphereGeometry(.016, 8, 8), M_PUPIL); p.scale.set(.18, .8, .2); p.position.set(.042, .03, sz * .061); head.add(p); eyes.push(p);
+      const e = new THREE.Mesh(new THREE.SphereGeometry(.016, 14, 10), eyeMat); e.position.set(.04, .04, sz * .056); e.scale.set(1, .85, .7); head.add(e);
+      const p = new THREE.Mesh(new THREE.SphereGeometry(.016, 8, 8), M_PUPIL); p.scale.set(.18, .8, .2); p.position.set(.047, .04, sz * .067); head.add(p); eyes.push(p);
       const lid = new THREE.Mesh(new THREE.SphereGeometry(.018, 12, 8), M_HEAD2); lid.position.copy(e.position); lid.scale.set(1, .9, .75); lid.visible = false; head.add(lid); lids.push(lid);
-      const brow = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 8), M_HEAD2); brow.scale.set(.036, .012, .02); brow.position.set(.035, .052, sz * .043); brow.rotation.y = sz * .25; head.add(brow);
-      const horn = new THREE.Mesh(new THREE.ConeGeometry(.008, .03, 6), M_CLAW2); horn.position.set(.005, .07, sz * .03); horn.rotation.z = .8; head.add(horn);
-      const nos = new THREE.Mesh(new THREE.SphereGeometry(.005, 6, 5), M_PUPIL); nos.position.set(.2, .011, sz * .011); head.add(nos);
+      const brow = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 8), M_HEAD2); brow.scale.set(.036, .012, .02); brow.position.set(.04, .064, sz * .048); brow.rotation.y = sz * .25; head.add(brow);
+      const horn = new THREE.Mesh(new THREE.ConeGeometry(.008, .03, 6), M_CLAW2); horn.position.set(.005, .07, sz * .03); horn.rotation.z = .8;
+      const nos = new THREE.Mesh(new THREE.SphereGeometry(.005, 6, 5), M_PUPIL); nos.position.set(.192, .014, sz * .018); head.add(nos);
     }
     // lower jaw on a hinge, with teeth and tongue
-    const jaw = new THREE.Group(); jaw.position.set(-.012, -.018, 0); head.add(jaw);
+    const jaw = new THREE.Group(); jaw.position.set(-.012, -.028, 0); head.add(jaw);
     jaw.add(new THREE.Mesh(staticTube(JAW, 20, 14, (col, u, sn) => { mixc(col, SKIN.base, SKIN.belly, (.2 - sn) * 2); col.offsetHSL(0, 0, (Math.random() - .5) * .04); }), M_HEAD));
     const inner = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 6), M_GUMS); inner.scale.set(.09, .008, .032); inner.position.set(.1, -.003, 0); jaw.add(inner);
     const tongue = new THREE.Mesh(new THREE.SphereGeometry(1, 10, 6), M_TONGUE2); tongue.scale.set(.06, .007, .02); tongue.position.set(.08, .002, 0); jaw.add(tongue);
-    for (let i = 0; i < 7; i++) { const x = .03 + i * .023, c = sample(JAW, x); for (const sz of [1, -1]) { const t = new THREE.Mesh(toothGeo, M_TOOTH2); t.position.set(x, c[1] + c[3] + .006, sz * c[2] * .78); t.scale.setScalar(.9 - i * .04); jaw.add(t); } }
+    for (let i = 0; i < 7; i++) { const x = .03 + i * .022, c = sample(JAW, x); for (const sz of [1, -1]) { const t = new THREE.Mesh(toothGeo, M_TOOTH2); t.position.set(x, c[1] + c[3] + .006, sz * c[2] * .78); t.scale.setScalar(.9 - i * .04); jaw.add(t); } }
     // legs: thigh, shin, ankle, three toes with claws
     const legPaint = (col, u, sn) => { mixc(col, SKIN.base, SKIN.dark, u * .8); col.offsetHSL(0, 0, (Math.random() - .5) * .04); };
-    const thighG = staticTube([[0, .03, .052, .06, 1], [.02, -.05, .05, .055, 1], [.035, -.12, .03, .034, 1]], 10, 14, legPaint);
-    const shinG = staticTube([[0, 0, .028, .03, 1], [-.025, -.05, .022, .024, 1], [-.045, -.09, .019, .02, 1]], 8, 12, legPaint);
-    const metaG = staticTube([[0, 0, .019, .019, 1], [.008, -.03, .017, .016, 1], [.015, -.055, .016, .014, 1]], 6, 10, legPaint);
-    const toeG = staticTube([[0, 0, .012, .011, 1], [.03, -.004, .01, .009, 1], [.05, -.008, .007, .006, 1]], 6, 8, legPaint);
+    const thighG = staticTube([[0, .04, .058, .07, 1], [.022, -.06, .058, .066, 1], [.04, -.15, .034, .038, 1]], 10, 14, legPaint);
+    const shinG = staticTube([[0, 0, .032, .035, 1], [-.028, -.055, .025, .027, 1], [-.05, -.1, .021, .022, 1]], 8, 12, legPaint);
+    const metaG = staticTube([[0, 0, .021, .021, 1], [.01, -.035, .019, .018, 1], [.018, -.065, .018, .016, 1]], 6, 10, legPaint);
+    const toeG = staticTube([[0, 0, .014, .013, 1], [.034, -.004, .012, .01, 1], [.058, -.008, .008, .007, 1]], 6, 8, legPaint);
     const clawG = new THREE.ConeGeometry(.0065, .025, 6); clawG.rotateZ(-Math.PI / 2 - .5);
-    const legs = [.078, -.078].map(z => {
-      const hip = new THREE.Group(); hip.position.set(-.06, .27, z); g.add(hip); hip.add(new THREE.Mesh(thighG, M_SKIN));
-      const knee = new THREE.Group(); knee.position.set(.035, -.12, 0); hip.add(knee); knee.add(new THREE.Mesh(shinG, M_SKIN));
-      const ankle = new THREE.Group(); ankle.position.set(-.045, -.09, 0); knee.add(ankle); ankle.add(new THREE.Mesh(metaG, M_SKIN));
-      const foot = new THREE.Group(); foot.position.set(.015, -.057, 0); ankle.add(foot);
-      for (const ang of [-.45, 0, .45]) { const toe = new THREE.Group(); toe.rotation.y = ang; foot.add(toe); toe.add(new THREE.Mesh(toeG, M_SKIN)); const cl = new THREE.Mesh(clawG, M_CLAW2); cl.position.set(.056, -.012, 0); toe.add(cl); }
+    const legs = [.088, -.088].map(z => {
+      const hip = new THREE.Group(); hip.position.set(-.05, .33, z); g.add(hip); hip.add(new THREE.Mesh(thighG, M_SKIN));
+      const knee = new THREE.Group(); knee.position.set(.04, -.15, 0); hip.add(knee); knee.add(new THREE.Mesh(shinG, M_SKIN));
+      const ankle = new THREE.Group(); ankle.position.set(-.05, -.1, 0); knee.add(ankle); ankle.add(new THREE.Mesh(metaG, M_SKIN));
+      const foot = new THREE.Group(); foot.position.set(.018, -.067, 0); ankle.add(foot);
+      for (const ang of [-.45, 0, .45]) { const toe = new THREE.Group(); toe.rotation.y = ang; foot.add(toe); toe.add(new THREE.Mesh(toeG, M_SKIN)); const cl = new THREE.Mesh(clawG, M_CLAW2); cl.position.set(.064, -.012, 0); toe.add(cl); }
       return { hip, knee, ankle, foot }; });
     // small arms with two claws each
     const armG = staticTube([[0, 0, .016, .017, 1], [.012, -.025, .013, .014, 1], [.02, -.045, .011, .012, 1]], 6, 10, legPaint);
     const foreG = staticTube([[0, 0, .011, .011, 1], [.02, -.005, .009, .009, 1], [.035, -.01, .008, .008, 1]], 5, 8, legPaint);
-    const arms = [.07, -.07].map(z => { const sh = new THREE.Group(); sh.position.set(.13, .28, z); g.add(sh); sh.add(new THREE.Mesh(armG, M_SKIN));
+    const arms = [.062, -.062].map(z => { const sh = new THREE.Group(); sh.position.set(.125, .4, z); sh.scale.setScalar(.8); g.add(sh); sh.add(new THREE.Mesh(armG, M_SKIN));
       const el = new THREE.Group(); el.position.set(.02, -.045, 0); sh.add(el); el.add(new THREE.Mesh(foreG, M_SKIN));
       for (const cz of [.005, -.005]) { const cl = new THREE.Mesh(clawG, M_CLAW2); cl.scale.setScalar(.7); cl.position.set(.04, -.014, cz); el.add(cl); }
       return { sh, el }; });
@@ -1019,7 +1019,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     fillSweep(d.bodyGeo, F);
     for (const p of d.plates) { const f = F[p.r]; p.m.position.set(f.x + f.nx * f.h * .82, f.y + f.ny * f.h * .82, f.z + f.nz * f.h * .82);
       p.m.rotation.set(0, -Math.atan2(f.tz, f.tx), Math.atan2(f.ty, Math.hypot(f.tx, f.tz))); }
-    const top = F[BR - 1]; d.head.position.set(top.x - .01, top.y, top.z);
+    const top = F[BR - 1]; d.head.position.set(top.x, top.y + .012, top.z);
   }
   // the little person who gets eaten in the catch scene
   const human = new THREE.Group(); human.visible = false; scene.add(human);
@@ -1292,7 +1292,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     const breath = 1 + Math.sin(tt * (chase ? 9 : 2.2)) * (chase ? .045 : .022);
     const yaw = d.mode === "calm" ? Math.sin(tt * .7 + d.x * 3) * .7 : 0;
     deformBody(d, d.phase * .5 + tt * .7, yaw, breath);
-    d.head.rotation.set(0, -yaw * .55, -.12 + d.anger * .22 + headWobble);
+    d.head.rotation.set(0, -yaw * .55, -.08 + d.anger * .2 + headWobble);
     d.jaw.rotation.z = -d.anger * .7 - (chase ? Math.max(0, Math.sin(tt * 6)) * .12 : 0);
     // legs: hip swings, knee bends on the forward stroke, foot stays flat
     d.legs.forEach((L, i) => { const p = d.phase + i * Math.PI, sw = Math.sin(p), lift = Math.max(0, Math.cos(p));
@@ -1317,7 +1317,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     dinos.forEach(d => { if (d.gv) stopGrowl(d); });
     const hx = st.x, hz = st.z, face = Math.atan2(d.z - hz, d.x - hx);
     // place the dinosaur just in front of the person, facing them
-    const px = hx + Math.cos(face) * .5, pz = hz + Math.sin(face) * .5;
+    const px = hx + Math.cos(face) * .72, pz = hz + Math.sin(face) * .72;
     Object.assign(d, { x: px, z: pz, a: face + Math.PI, anger: 1 });
     human.position.set(hx, 0, hz); human.rotation.set(0, -face, 0); human.scale.setScalar(1); human.visible = true;
     // pick a camera spot that can see both
@@ -1338,7 +1338,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     else if (t < 3.6) { rear = -.6 + Math.sin(t * 9) * .15; lunge = 1; jawOpen = .25 + .25 * Math.sin(t * 14); }
     else { const k = Math.min(1, (t - 3.6) / .8); rear = -.6 + k * 1.4; lunge = 1 - k * .4; jawOpen = k * .9; }
     const back = Math.cos(c.face), backz = Math.sin(c.face);
-    d.x = c.hx + back * (.5 - lunge * .2); d.z = c.hz + backz * (.5 - lunge * .2);
+    d.x = c.hx + back * (.72 - lunge * .2); d.z = c.hz + backz * (.72 - lunge * .2);
     d.anger = 1; poseDino(d, 0); d.head.rotation.z = rear * .6; d.jaw.rotation.z = -jawOpen * .9;
     d.g.position.y = Math.max(0, Math.sin(Math.min(1, t) * Math.PI) * .03);
     // the person: waves arms, then is snatched into the mouth
