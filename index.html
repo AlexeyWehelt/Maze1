@@ -110,7 +110,7 @@ button { font: inherit; cursor: pointer; }
       <div class="keys">
         <span><kbd>W</kbd> <kbd>S</kbd> / <kbd>↑</kbd> <kbd>↓</kbd></span><span>вперёд и назад</span>
         <span><kbd>A</kbd> <kbd>D</kbd> / <kbd>←</kbd> <kbd>→</kbd></span><span>поворот</span>
-        <span>мышь</span><span>зажмите и тяните, чтобы осмотреться</span>
+        <span>мышь</span><span>щёлкните по экрану — и поворачивайтесь мышью без ограничений; <kbd>Esc</kbd> освобождает курсор</span>
         <span>прыжки</span><span>сами: набегите на предмет — и перепрыгнете его</span>
         <span>телефон</span><span>кнопки внизу и свайп по экрану</span>
       </div>
@@ -652,41 +652,6 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
   const exitLight = new THREE.PointLight(0x5aa8ff, 1.2, 2.5, 1.5); exitLight.position.y = .5; exitG.add(exitLight);
   document.fonts && document.fonts.load("700 100px Caveat").then(() => { drawE("'Caveat', cursive"); eTex.needsUpdate = true; }).catch(() => {});
 
-  // ---------- ambient particles per land ----------
-  const PART = [
-    { col: [0xd8ff60, 0xffe080], n: 420, kind: "fly", size: .035 },     // jungle fireflies
-    { col: [0xffb8d8, 0xffe0ee], n: 300, kind: "fall", size: .03 },     // petals
-    { col: [0xf0c890, 0xffe0b0], n: 380, kind: "drift", size: .025 },   // dust
-    { col: [0xffffff, 0xf0f0e0], n: 260, kind: "mote", size: .02 },     // dust motes
-    { col: [0xff9a30, 0xffd060], n: 260, kind: "rise", size: .022 },    // sparks and embers
-    { col: [0x70ffe8, 0xd090ff], n: 460, kind: "rise", size: .03 },     // spores
-    { col: [0xa0d8ff, 0xe0f4ff], n: 320, kind: "fall", size: .018 }     // drips
-  ];
-  const pPos = [], pCol = [], pData = [];
-  { const free = []; for (let i = 0; i < W * H; i += 3) if (!bits[i]) free.push(i);
-    const byB = [[], [], [], [], [], [], []]; for (const i of free) byB[biome[i]].push(i);
-    const cc = new THREE.Color();
-    PART.forEach((p, b) => { const cells = byB[b]; if (!cells.length) return;
-      for (let k = 0; k < p.n; k++) { const i = cells[Math.floor(rnd() * cells.length)], x = (i % W + rnd()) / K, z = ((i / W | 0) + rnd()) / K, y = rr(.05, .9);
-        pPos.push(x, y, z); cc.set(pick(p.col)); pCol.push(cc.r, cc.g, cc.b); pData.push({ x, y, z, b, ph: rnd() * 100, sp: rr(.5, 1.5) }); } }); }
-  const pGeo = new THREE.BufferGeometry();
-  pGeo.setAttribute("position", new THREE.Float32BufferAttribute(pPos, 3)); pGeo.setAttribute("color", new THREE.Float32BufferAttribute(pCol, 3));
-  const dotCv = document.createElement("canvas"); dotCv.width = dotCv.height = 32;
-  { const g = dotCv.getContext("2d"), gr = g.createRadialGradient(16, 16, 0, 16, 16, 16); gr.addColorStop(0, "rgba(255,255,255,1)"); gr.addColorStop(.4, "rgba(255,255,255,.6)"); gr.addColorStop(1, "rgba(255,255,255,0)"); g.fillStyle = gr; g.fillRect(0, 0, 32, 32); }
-  const particles = new THREE.Points(pGeo, new THREE.PointsMaterial({ size: .045, map: new THREE.CanvasTexture(dotCv), vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true }));
-  scene.add(particles);
-  function updateParticles(dt, now) {
-    const a = pGeo.attributes.position, t = now * .001;
-    for (let i = 0; i < pData.length; i++) { const p = pData[i], k = PART[p.b].kind; let x = p.x, y = p.y, z = p.z;
-      if (k === "fly") { x += Math.sin(t * .7 * p.sp + p.ph) * .25; z += Math.cos(t * .6 * p.sp + p.ph * 1.3) * .25; y = .15 + (Math.sin(t * .9 * p.sp + p.ph) * .5 + .5) * .5; }
-      else if (k === "fall") { y = .95 - ((t * .12 * p.sp + p.ph) % 1) * .95; x += Math.sin(t * 1.5 + p.ph) * .06; }
-      else if (k === "rise") { y = ((t * .08 * p.sp + p.ph) % 1) * .95; x += Math.sin(t + p.ph) * .08; z += Math.cos(t * .8 + p.ph) * .08; }
-      else if (k === "drift") { x += ((t * .15 * p.sp + p.ph) % 1.6) - .8; y = p.y * .5 + Math.sin(t + p.ph) * .03; }
-      else { x += Math.sin(t * .3 + p.ph) * .08; y = p.y + Math.sin(t * .4 + p.ph) * .06; }
-      a.setXYZ(i, x, y, z); }
-    a.needsUpdate = true;
-  }
-
   // ---------- state ----------
   const REV = 4, RW = Math.ceil(W / REV), RH = Math.ceil(H / REV);
   let startAngle = 0, bestRun = -1;
@@ -749,14 +714,24 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     b.addEventListener("pointerdown", on); b.addEventListener("pointerup", off);
     b.addEventListener("pointerleave", off); b.addEventListener("pointercancel", off);
   });
-  let drag = null, pitch = 0;
-  view.addEventListener("pointerdown", e => { drag = { x: e.clientX, y: e.clientY, id: e.pointerId }; view.setPointerCapture(e.pointerId); });
+  // Mouse look never runs out: on a computer the cursor is captured (Esc releases it);
+  // where capture isn't available, holding the cursor or finger near a screen edge keeps turning
+  let drag = null, pitch = 0, edgeTurn = 0;
+  const locked = () => document.pointerLockElement === view;
+  view.addEventListener("pointerdown", e => {
+    if (e.pointerType === "mouse" && st.running && view.requestPointerLock && !locked()) { try { const p = view.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (err) {} }
+    drag = { x: e.clientX, y: e.clientY, id: e.pointerId }; try { view.setPointerCapture(e.pointerId); } catch (err) {}
+  });
   view.addEventListener("pointermove", e => {
-    if (!drag || e.pointerId !== drag.id || !st.running) return;
+    if (!st.running) return;
+    if (locked()) { st.a += (e.movementX || 0) * 0.0035; pitch = Math.max(-.7, Math.min(.8, pitch - (e.movementY || 0) * 0.0025)); edgeTurn = 0; return; }
+    if (!drag || e.pointerId !== drag.id) return;
     st.a += (e.clientX - drag.x) * 0.006; pitch = Math.max(-.7, Math.min(.8, pitch - (e.clientY - drag.y) * 0.004));
     drag.x = e.clientX; drag.y = e.clientY;
+    const w = view.clientWidth || innerWidth, edge = Math.min(60, w * .08);
+    edgeTurn = e.clientX < edge ? -1 : e.clientX > w - edge ? 1 : 0;
   });
-  const endDrag = () => { drag = null; };
+  const endDrag = () => { drag = null; edgeTurn = 0; };
   view.addEventListener("pointerup", endDrag); view.addEventListener("pointercancel", endDrag);
 
   const intro = document.getElementById("intro"), win = document.getElementById("win");
@@ -776,7 +751,8 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     st.t += dt;
     let moving = false;
     const turn = (keys["arrowleft"] || keys["a"] || keys["ф"] || move.l ? -1 : 0) + (keys["arrowright"] || keys["d"] || keys["в"] || move.r ? 1 : 0);
-    st.a += turn * 2.3 * dt;
+    st.a += (turn + edgeTurn) * 2.3 * dt;
+    st.a = Math.atan2(Math.sin(st.a), Math.cos(st.a));
     const fwd = (keys["arrowup"] || keys["w"] || keys["ц"] || move.f ? 1 : 0) - (keys["arrowdown"] || keys["s"] || keys["ы"] || move.b ? 1 : 0);
     if (fwd) {
       const sp = 1.5 * dt * fwd, dx = Math.cos(st.a) * sp, dz = Math.sin(st.a) * sp, ox = st.x, oz = st.z;
@@ -805,7 +781,9 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
   const fmt = t => { const m = Math.floor(t / 60), s = t - m * 60; return m + ":" + (s < 10 ? "0" : "") + s.toFixed(1); };
   const timeEl = document.getElementById("time"), distEl = document.getElementById("dist"), landsEl = document.getElementById("lands");
   function updateHud() { timeEl.textContent = fmt(st.t); distEl.textContent = Math.round(st.d) + " м"; landsEl.textContent = st.lands.length + "/28"; }
+  function releaseMouse() { try { if (locked()) document.exitPointerLock(); } catch (e) {} }
   function finish() {
+    releaseMouse();
     st.won = true; st.running = false;
     document.getElementById("result").textContent = fmt(st.t) + " · " + Math.round(st.d) + " м · мест " + st.lands.length + "/28";
     let best = null; try { best = parseFloat(localStorage.getItem("sticker-maze-best")); } catch (e) {}
@@ -1201,7 +1179,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
   // ---- the catch: a 5-second scene of the dinosaur eating the little person ----
   let cut = null;
   function startCatch(d) {
-    st.running = false;
+    st.running = false; releaseMouse(); endDrag();
     dinos.forEach(d => { if (d.gv) stopGrowl(d); });
     const hx = st.x, hz = st.z, face = Math.atan2(d.z - hz, d.x - hx);
     // place the dinosaur just in front of the person, facing them
@@ -1286,7 +1264,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
   let last = performance.now(), hudT = 0;
   function frame(now) {
     const dt = Math.min(.05, (now - last) / 1000); last = now;
-    update(dt); blendEnv(dt); updateTorches(now); updateParticles(dt, now);
+    update(dt); blendEnv(dt); updateTorches(now);
     landBob *= Math.exp(-dt * 10);
     const y = EYE + st.y - landBob + (reduce || !st.ground ? 0 : Math.sin(bob) * .015);
     if (!cut) { camera.position.set(st.x, y, st.z); camera.lookAt(st.x + Math.cos(st.a), y + Math.tan(pitch), st.z + Math.sin(st.a)); }
