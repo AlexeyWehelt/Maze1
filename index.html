@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Лабиринт со стикера</title>
 <style>
 /* Layout: full-screen first-person view; HUD strip on top, zone name centered, minimap top-right, touch pad bottom. Single look by choice: sticky-note lime + graphite UI over a multi-biome 3D world. */
@@ -50,16 +50,30 @@ body { background: #1a1d14; color: var(--ink); font-family: var(--body); font-si
 kbd { font-family: var(--mono); font-size: 12px; color: var(--ink); background: rgba(255,255,255,.5); border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px; }
 button { font: inherit; cursor: pointer; }
 .go { justify-self: start; background: var(--graphite); color: var(--paper); border: 0; border-radius: 6px; padding: 10px 22px; font-weight: 700; font-size: 16px; }
-.go:focus-visible, .pad button:focus-visible, .restart:focus-visible { outline: 2px solid var(--mark); outline-offset: 2px; }
+.go:focus-visible, .restart:focus-visible { outline: 2px solid var(--mark); outline-offset: 2px; }
 .result { font-family: var(--mono); font-size: 22px; font-variant-numeric: tabular-nums; }
-.pad { position: absolute; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); display: grid; grid-template-columns: repeat(3, 58px); grid-template-rows: repeat(2, 58px); gap: 8px; }
-.pad button { background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; font-size: 22px; user-select: none; -webkit-user-select: none; touch-action: none; }
-.pad button.on { background: var(--paper); }
-.pad .up { grid-column: 2; grid-row: 1; } .pad .lt { grid-column: 1; grid-row: 2; }
-.pad .dn { grid-column: 2; grid-row: 2; } .pad .rt { grid-column: 3; grid-row: 2; }
+.stick, .look { display: none; position: absolute; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); touch-action: none; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
+.touch .stick, .touch .look { display: block; }
+.stick { left: calc(22px + env(safe-area-inset-left, 0px)); width: min(40vh, 150px); height: min(40vh, 150px); border-radius: 50%; background: rgba(250,247,232,.28); border: 2px solid rgba(250,247,232,.6); }
+.stick i { position: absolute; width: 0; height: 0; border: 7px solid transparent; opacity: .75; }
+.stick i:nth-child(1) { left: 50%; top: 7px; margin-left: -7px; border-bottom-color: #fffbe8; border-top-width: 0; }
+.stick i:nth-child(2) { left: 50%; bottom: 7px; margin-left: -7px; border-top-color: #fffbe8; border-bottom-width: 0; }
+.stick i:nth-child(3) { top: 50%; left: 7px; margin-top: -7px; border-right-color: #fffbe8; border-left-width: 0; }
+.stick i:nth-child(4) { top: 50%; right: 7px; margin-top: -7px; border-left-color: #fffbe8; border-right-width: 0; }
+.knob { position: absolute; left: 50%; top: 50%; width: 42%; height: 42%; margin: -21% 0 0 -21%; border-radius: 50%; background: var(--paper); border: 2px solid var(--graphite); box-shadow: 0 2px 8px rgba(0,0,0,.4); pointer-events: none; }
+.look { right: calc(22px + env(safe-area-inset-right, 0px)); width: min(42vw, 230px); height: min(40vh, 150px); border-radius: 14px; background: rgba(250,247,232,.2); border: 2px dashed rgba(250,247,232,.6); display: none; }
+.touch .look { display: grid; place-items: center; }
+.look span { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: rgba(255,251,232,.75); pointer-events: none; }
+.look.on { background: rgba(250,247,232,.32); }
+#rotate { display: none; position: absolute; inset: 0; z-index: 5; place-items: center; text-align: center; padding: 24px; background: rgba(20,18,12,.9); color: var(--paper); font-family: var(--display); font-size: 34px; }
+@media (orientation: portrait) { .touch #rotate { display: grid; } }
+.touch .restart { right: auto; left: 50%; transform: translateX(-50%); bottom: auto; top: calc(10px + env(safe-area-inset-top, 0px)); padding: 6px 10px; }
+.touch .restart kbd, .touch .desk { display: none; }
+.keys .mob { display: none; } .touch .keys .mob { display: contents; }
+.touch .hud { left: calc(16px + env(safe-area-inset-left, 0px)); right: calc(16px + env(safe-area-inset-right, 0px)); }
+.overlay { overflow: auto; }
+@media (max-height: 480px) { .card { padding: 14px 18px; gap: 8px; max-width: 40rem; } .card h1 { font-size: 30px; } .card p { font-size: 13px; line-height: 1.35; } .keys { font-size: 12.5px; gap: 3px 12px; } #compass { width: 56px; height: 56px; } .stat { padding: 5px 9px; font-size: 12px; } }
 .restart { position: absolute; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px; font-size: 13px; }
-@media (hover: hover) and (pointer: fine) { .pad { display: none; } }
-@media (max-width: 480px) { .restart { bottom: calc(150px + env(safe-area-inset-bottom, 0px)); } }
 </style>
 
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@700&family=Nunito:wght@400;700&family=JetBrains+Mono&display=swap">
@@ -95,24 +109,21 @@ button { font: inherit; cursor: pointer; }
       <canvas id="mini" aria-label="Мини-карта" hidden></canvas>
     </div>
   </div>
-  <div class="pad" aria-label="Управление">
-    <button class="up" data-k="f" aria-label="Вперёд">▲</button>
-    <button class="lt" data-k="l" aria-label="Повернуть налево">⟲</button>
-    <button class="dn" data-k="b" aria-label="Назад">▼</button>
-    <button class="rt" data-k="r" aria-label="Повернуть направо">⟳</button>
-  </div>
+  <div class="stick" id="stick" aria-label="Движение: вперёд, назад, поворот"><i></i><i></i><i></i><i></i><div class="knob" id="knob"></div></div>
+  <div class="look" id="look" aria-label="Обзор: водите пальцем, как по тачпаду"><span>обзор</span></div>
   <button class="restart" id="restart">Заново <kbd>R</kbd></button>
-
+  <div id="rotate">Поверните телефон горизонтально</div>
   <div class="overlay" id="intro">
     <div class="card">
       <h1>Лабиринт со стикера</h1>
       <p>Ваш рисунок превратился в целый мир, и каждый его уголок не похож на соседний. Найдите выход — синюю букву E. По лабиринту бродят три динозавра, и один из них сторожит выход. Они видят перед собой и слышат ваши шаги, а вы слышите их ворчание и топот, так что включите звук. Заметит — погонится, а поймает — начнёте сначала. Если динозавр замер и уставился на вас, а голова наливается багровым, у вас пара секунд, чтобы скрыться.</p>
       <div class="keys">
-        <span><kbd>W</kbd> <kbd>S</kbd> / <kbd>↑</kbd> <kbd>↓</kbd></span><span>вперёд и назад</span>
-        <span><kbd>A</kbd> <kbd>D</kbd> / <kbd>←</kbd> <kbd>→</kbd></span><span>поворот</span>
-        <span>мышь</span><span>щёлкните по экрану — и поворачивайтесь мышью без ограничений; <kbd>Esc</kbd> освобождает курсор</span>
+        <span class="desk"><kbd>W</kbd> <kbd>S</kbd> / <kbd>↑</kbd> <kbd>↓</kbd></span><span class="desk">вперёд и назад</span>
+        <span class="desk"><kbd>A</kbd> <kbd>D</kbd> / <kbd>←</kbd> <kbd>→</kbd></span><span class="desk">поворот</span>
+        <span class="desk">мышь</span><span class="desk">щёлкните по экрану — и поворачивайтесь мышью без ограничений; <kbd>Esc</kbd> освобождает курсор</span>
+        <span class="mob"><span>слева</span><span>джойстик: вверх и вниз — идти вперёд и назад, в стороны — поворот</span></span>
+        <span class="mob"><span>справа</span><span>тачпад обзора: ведите пальцем, чтобы осмотреться</span></span>
         <span>прыжки</span><span>сами: набегите на предмет — и перепрыгнете его</span>
-        <span>телефон</span><span>кнопки внизу и свайп по экрану</span>
       </div>
       <button class="go" id="start">Войти</button>
     </div>
@@ -751,13 +762,32 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
   });
   addEventListener("keyup", e => { keys[e.key.toLowerCase()] = false; });
   addEventListener("blur", () => { for (const k in keys) keys[k] = false; });
-  document.querySelectorAll(".pad button").forEach(b => {
-    const k = b.dataset.k;
-    const on = e => { e.preventDefault(); move[k] = true; b.classList.add("on"); };
-    const off = () => { move[k] = false; b.classList.remove("on"); };
-    b.addEventListener("pointerdown", on); b.addEventListener("pointerup", off);
-    b.addEventListener("pointerleave", off); b.addEventListener("pointercancel", off);
-  });
+  // ---- touch controls: left stick moves and turns like the keys, right pad looks around like a mouse ----
+  const gameEl = document.getElementById("game");
+  const isTouch = matchMedia("(pointer: coarse)").matches;
+  if (isTouch) gameEl.classList.add("touch");
+  let joyF = 0, joyT = 0;
+  { const stick = document.getElementById("stick"), knob = document.getElementById("knob"); let id = null;
+    const set = e => { const r = stick.getBoundingClientRect(), R = r.width / 2; let x = (e.clientX - r.left - R) / R, y = (e.clientY - r.top - R) / R;
+      const m = Math.hypot(x, y); if (m > 1) { x /= m; y /= m; }
+      knob.style.transform = `translate(${x * R * .58}px, ${y * R * .58}px)`;
+      const dead = v => Math.abs(v) < .22 ? 0 : (v - Math.sign(v) * .22) / .78;
+      joyF = -dead(y); joyT = dead(x); };
+    const end = e => { if (e.pointerId !== id) return; id = null; joyF = joyT = 0; knob.style.transform = ""; };
+    stick.addEventListener("pointerdown", e => { e.preventDefault(); e.stopPropagation(); id = e.pointerId; try { stick.setPointerCapture(id); } catch (err) {} set(e); });
+    stick.addEventListener("pointermove", e => { if (e.pointerId === id) { e.preventDefault(); set(e); } });
+    stick.addEventListener("pointerup", end); stick.addEventListener("pointercancel", end); stick.addEventListener("lostpointercapture", end); }
+  { const look = document.getElementById("look"); let id = null, lx = 0, ly = 0;
+    const end = e => { if (e.pointerId !== id) return; id = null; look.classList.remove("on"); };
+    look.addEventListener("pointerdown", e => { e.preventDefault(); e.stopPropagation(); id = e.pointerId; lx = e.clientX; ly = e.clientY; look.classList.add("on"); try { look.setPointerCapture(id); } catch (err) {} });
+    look.addEventListener("pointermove", e => { if (e.pointerId !== id || !st.running) return; e.preventDefault();
+      st.a += (e.clientX - lx) * .009; pitch = Math.max(-.7, Math.min(.8, pitch - (e.clientY - ly) * .006)); lx = e.clientX; ly = e.clientY; });
+    look.addEventListener("pointerup", end); look.addEventListener("pointercancel", end); look.addEventListener("lostpointercapture", end); }
+  // on a phone: go full screen and ask for landscape (browsers may refuse; the game still works)
+  function goLandscape() { if (!isTouch) return;
+    try { const el = document.documentElement, p = (el.requestFullscreen || el.webkitRequestFullscreen || (() => null)).call(el);
+      const lock = () => { try { const q = screen.orientation && screen.orientation.lock && screen.orientation.lock("landscape"); if (q && q.catch) q.catch(() => {}); } catch (err) {} };
+      if (p && p.then) p.then(lock).catch(lock); else lock(); } catch (err) {} }
   // Mouse look never runs out: on a computer the cursor is captured (Esc releases it);
   // where capture isn't available, holding the cursor or finger near a screen edge keeps turning
   let drag = null, pitch = 0, edgeTurn = 0;
@@ -773,7 +803,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     st.a += (e.clientX - drag.x) * 0.006; pitch = Math.max(-.7, Math.min(.8, pitch - (e.clientY - drag.y) * 0.004));
     drag.x = e.clientX; drag.y = e.clientY;
     const w = view.clientWidth || innerWidth, edge = Math.min(60, w * .08);
-    edgeTurn = e.clientX < edge ? -1 : e.clientX > w - edge ? 1 : 0;
+    edgeTurn = e.pointerType === "touch" ? 0 : e.clientX < edge ? -1 : e.clientX > w - edge ? 1 : 0;
   });
   const endDrag = () => { drag = null; edgeTurn = 0; };
   view.addEventListener("pointerup", endDrag); view.addEventListener("pointercancel", endDrag);
@@ -781,7 +811,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
   const intro = document.getElementById("intro"), win = document.getElementById("win");
   let zoneTimer = 0, curZone = -1, zoneHold = 0, pendingZone = -1;
   function showZone() {}
-  function begin() { audioInit(); intro.hidden = true; st.running = true; curZone = zoneAt(st.x, st.z); }
+  function begin() { audioInit(); goLandscape(); intro.hidden = true; st.running = true; curZone = zoneAt(st.x, st.z); }
   document.getElementById("start").addEventListener("click", begin);
   function restart() { st = fresh(); pitch = 0; win.hidden = true; st.running = intro.hidden; curZone = zoneAt(st.x, st.z); reveal(); updateHud(); drawMini(); }
   document.getElementById("restart").addEventListener("click", () => { if (cut) return; audioInit(); restart(); spawnAll(); });
@@ -794,14 +824,14 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     if (!st.running || st.won) return;
     st.t += dt;
     let moving = false;
-    const turn = (keys["arrowleft"] || keys["a"] || keys["ф"] || move.l ? -1 : 0) + (keys["arrowright"] || keys["d"] || keys["в"] || move.r ? 1 : 0);
+    const turn = (keys["arrowleft"] || keys["a"] || keys["ф"] || move.l ? -1 : 0) + (keys["arrowright"] || keys["d"] || keys["в"] || move.r ? 1 : 0) + joyT;
     st.a += (turn + edgeTurn) * 2.3 * dt;
     st.a = Math.atan2(Math.sin(st.a), Math.cos(st.a));
-    const fwd = (keys["arrowup"] || keys["w"] || keys["ц"] || move.f ? 1 : 0) - (keys["arrowdown"] || keys["s"] || keys["ы"] || move.b ? 1 : 0);
+    const fwd = (keys["arrowup"] || keys["w"] || keys["ц"] || move.f ? 1 : 0) - (keys["arrowdown"] || keys["s"] || keys["ы"] || move.b ? 1 : 0) + joyF;
     if (fwd) {
       const sp = 1.5 * dt * fwd, dx = Math.cos(st.a) * sp, dz = Math.sin(st.a) * sp, ox = st.x, oz = st.z;
       // automatic jump: running into anything that isn't a wall hops over it
-      const px = st.x + Math.cos(st.a) * fwd * (RAD + .07), pz = st.z + Math.sin(st.a) * fwd * (RAD + .07);
+      const sg = Math.sign(fwd), px = st.x + Math.cos(st.a) * sg * (RAD + .07), pz = st.z + Math.sin(st.a) * sg * (RAD + .07);
       if (st.ground && hitProp(px, pz, st.y) && !hitWall(px, pz)) { st.vy = JUMP_V; st.ground = false; }
       if (!blocked(st.x + dx, st.z, st.y)) st.x += dx;
       if (!blocked(st.x, st.z + dz, st.y)) st.z += dz;
