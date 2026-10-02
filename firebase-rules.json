@@ -1,0 +1,11 @@
+{
+  "rules": {
+    "users": {
+      ".read": true,
+      ".indexOn": ["best"],
+      "$u": { ".write": "!data.exists() || newData.child('h').val() === data.child('h').val()" }
+    },
+    "presence": { ".read": true, "$u": { ".write": true } },
+    "world": { ".read": true, ".write": true }
+  }
+}

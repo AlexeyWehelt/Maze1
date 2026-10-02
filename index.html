@@ -51,6 +51,18 @@ kbd { font-family: var(--mono); font-size: 12px; color: var(--ink); background: 
 button { font: inherit; cursor: pointer; }
 .go { justify-self: start; background: var(--graphite); color: var(--paper); border: 0; border-radius: 6px; padding: 10px 22px; font-weight: 700; font-size: 16px; }
 .go:focus-visible, .restart:focus-visible { outline: 2px solid var(--mark); outline-offset: 2px; }
+.login { display: grid; gap: 8px; justify-items: start; }
+#netFields { display: flex; flex-wrap: wrap; gap: 10px 14px; }
+#netFields[hidden] { display: none; }
+.login label { display: grid; gap: 3px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: #3e4430; }
+.login input { font: 700 18px var(--body); letter-spacing: normal; text-transform: none; color: var(--ink); background: rgba(255,255,255,.7); border: 1.5px solid var(--graphite); border-radius: 6px; padding: 7px 10px; width: 11rem; max-width: 100%; }
+.login input#pcode { width: 7rem; font-family: var(--mono); letter-spacing: .3em; }
+.login input:focus-visible { outline: 2px solid var(--mark); outline-offset: 2px; }
+#loginMsg { min-height: 1.2em; margin: 0; font-size: 14px; font-weight: 700; color: #9a1a10; }
+#loginMsg:empty { display: none; }
+.note { font-size: 13px; color: #4a5038; }
+.top { margin: 0; padding-left: 1.4em; font-family: var(--mono); font-size: 14px; display: grid; gap: 2px; }
+.top:empty { display: none; }
 .result { font-family: var(--mono); font-size: 22px; font-variant-numeric: tabular-nums; }
 .stick, .look { display: none; position: absolute; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); touch-action: none; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
 .touch .stick, .touch .look { display: block; }
@@ -71,12 +83,13 @@ button { font: inherit; cursor: pointer; }
 .touch .restart kbd, .touch .desk { display: none; }
 .keys .mob { display: none; } .touch .keys .mob { display: contents; }
 .touch .hud { left: calc(16px + env(safe-area-inset-left, 0px)); right: calc(16px + env(safe-area-inset-right, 0px)); }
-.overlay { overflow: auto; }
+.overlay { overflow: auto; align-items: safe center; }
 @media (max-height: 480px) { .card { padding: 14px 18px; gap: 8px; max-width: 40rem; } .card h1 { font-size: 30px; } .card p { font-size: 13px; line-height: 1.35; } .keys { font-size: 12.5px; gap: 3px 12px; } #compass { width: 56px; height: 56px; } .stat { padding: 5px 9px; font-size: 12px; } }
 .restart { position: absolute; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px; font-size: 13px; }
 </style>
 
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@700&family=Nunito:wght@400;700&family=JetBrains+Mono&display=swap">
+<script src="firebase-config.js"></script>
 </head>
 <body>
 
@@ -90,6 +103,7 @@ button { font: inherit; cursor: pointer; }
       <span><b>Время</b><em id="time">0:00.0</em></span>
       <span><b>Путь</b><em id="dist">0 м</em></span>
       <span><b>Места</b><em id="lands">1/28</em></span>
+      <span id="onlineWrap" hidden><b>Игроки</b><em id="online">1</em></span>
     </div>
     <div class="right">
       <svg id="compass" viewBox="-50 -50 100 100" role="img" aria-label="Компас">
@@ -116,7 +130,16 @@ button { font: inherit; cursor: pointer; }
   <div class="overlay" id="intro">
     <div class="card">
       <h1>Лабиринт со стикера</h1>
-      <p>Ваш рисунок превратился в целый мир, и каждый его уголок не похож на соседний. Найдите выход — синюю букву E. По лабиринту бродят три динозавра, и один из них сторожит выход. Они видят перед собой и слышат ваши шаги, а вы слышите их ворчание и топот, так что включите звук. Заметит — погонится, а поймает — начнёте сначала. Если динозавр замер и уставился на вас, а голова наливается багровым, у вас пара секунд, чтобы скрыться.</p>
+      <p>Найдите выход — синюю букву E. По лабиринту бродят динозавры: они видят перед собой и слышат шаги, а вы слышите их, так что включите звук. Заметив вас, динозавр замирает и наливается багровым, а через пару секунд бросается в погоню. Поймает — начнёте сначала. Мир общий: с каждым новым игроком у выхода появляется ещё один динозавр.</p>
+      <form id="login" class="login" novalidate>
+        <div id="netFields" hidden>
+          <label for="pname">Имя<input id="pname" name="pname" maxlength="16" autocomplete="username" autocapitalize="off" spellcheck="false"></label>
+          <label for="pcode">Код из 4 цифр<input id="pcode" name="pcode" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="0000"></label>
+        </div>
+        <button class="go" id="start" type="submit">Войти</button>
+        <p id="loginMsg" role="alert"></p>
+        <p id="soloNote" class="note" hidden>Сетевая игра здесь недоступна, вы играете в одиночку.</p>
+      </form>
       <div class="keys">
         <span class="desk"><kbd>W</kbd> <kbd>S</kbd> / <kbd>↑</kbd> <kbd>↓</kbd></span><span class="desk">вперёд и назад</span>
         <span class="desk"><kbd>A</kbd> <kbd>D</kbd> / <kbd>←</kbd> <kbd>→</kbd></span><span class="desk">поворот</span>
@@ -125,7 +148,6 @@ button { font: inherit; cursor: pointer; }
         <span class="mob"><span>справа</span><span>тачпад обзора: ведите пальцем, чтобы осмотреться</span></span>
         <span>прыжки</span><span>сами: набегите на предмет — и перепрыгнете его</span>
       </div>
-      <button class="go" id="start">Войти</button>
     </div>
   </div>
   <div class="overlay" id="win" hidden>
@@ -133,6 +155,7 @@ button { font: inherit; cursor: pointer; }
       <h1>Дошли до E</h1>
       <div class="result" id="result"></div>
       <p id="best"></p>
+      <ol id="top" class="top"></ol>
       <button class="go" id="again">Пройти ещё раз</button>
     </div>
   </div>
@@ -752,13 +775,14 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
   document.querySelector(".stat").addEventListener("pointerdown", e => { e.preventDefault(); secretTap(); });
   const keys = {}, move = { f: false, b: false, l: false, r: false };
   addEventListener("keydown", e => {
+    if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "BUTTON")) return;
     const k = e.key.toLowerCase();
     if (["arrowup", "arrowdown", "arrowleft", "arrowright", " "].includes(k)) e.preventDefault();
     keys[k] = true;
     // secret: press M twice quickly to toggle the map
     if ((k === "m" || k === "ь") && !e.repeat) secretTap();
-    if ((k === "r" || k === "к") && !e.repeat && !cut) { restart(); spawnAll(); }
-    if (k === "enter") { if (!intro.hidden) begin(); else if (!win.hidden) { restart(); spawnAll(); } }
+    if ((k === "r" || k === "к") && !e.repeat && !cut && intro.hidden) { restart(); resetWorld(); }
+    if (k === "enter") { if (!intro.hidden) loginForm.requestSubmit(); else if (!win.hidden) { restart(); resetWorld(); } }
   });
   addEventListener("keyup", e => { keys[e.key.toLowerCase()] = false; });
   addEventListener("blur", () => { for (const k in keys) keys[k] = false; });
@@ -812,13 +836,13 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
   let zoneTimer = 0, curZone = -1, zoneHold = 0, pendingZone = -1;
   function showZone() {}
   function begin() { audioInit(); goLandscape(); intro.hidden = true; st.running = true; curZone = zoneAt(st.x, st.z); }
-  document.getElementById("start").addEventListener("click", begin);
   function restart() { st = fresh(); pitch = 0; win.hidden = true; st.running = intro.hidden; curZone = zoneAt(st.x, st.z); reveal(); updateHud(); drawMini(); }
-  document.getElementById("restart").addEventListener("click", () => { if (cut) return; audioInit(); restart(); spawnAll(); });
-  document.getElementById("again").addEventListener("click", () => { audioInit(); restart(); spawnAll(); });
+  document.getElementById("restart").addEventListener("click", () => { if (cut) return; audioInit(); restart(); resetWorld(); });
+  document.getElementById("again").addEventListener("click", () => { audioInit(); restart(); resetWorld(); });
 
   let bob = 0;
   function update(dt) {
+    localMoving = false;
     if (cut) { updateCatch(dt); return; }
     if (caughtT > 0) { caughtT -= dt; if (caughtT <= 0) caughtEl.hidden = true; }
     if (!st.running || st.won) return;
@@ -850,7 +874,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     const b = zoneAt(st.x, st.z);
     if (b !== curZone) { if (b === pendingZone) { zoneHold += dt; if (zoneHold > .35) { curZone = b; if (!st.lands.includes(b)) st.lands.push(b); } } else { pendingZone = b; zoneHold = 0; } }
     if (Math.hypot(st.x - EX, st.z - EZ) < .3) { finish(); return; }
-    dinosUpdate(dt, moving);
+    localMoving = moving;
   }
   const fmt = t => { const m = Math.floor(t / 60), s = t - m * 60; return m + ":" + (s < 10 ? "0" : "") + s.toFixed(1); };
   const timeEl = document.getElementById("time"), distEl = document.getElementById("dist"), landsEl = document.getElementById("lands");
@@ -864,6 +888,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     const bestEl = document.getElementById("best");
     if (!best || st.t < best) { try { localStorage.setItem("sticker-maze-best", String(st.t)); } catch (e) {} bestEl.textContent = best ? "Новый рекорд. Прошлый: " + fmt(best) + "." : "Первое прохождение. Попробуйте быстрее или загляните во все 28 мест."; }
     else bestEl.textContent = "Ваш рекорд: " + fmt(best) + ".";
+    if (NET.on) NET.backend.saveBest(NET.me, Math.round(st.t * 10) / 10).then(showTop).catch(() => {}); else showTop();
     win.hidden = false; document.getElementById("again").focus();
   }
 
@@ -1060,9 +1085,13 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     bx(.06, .06, .06, skin, 0, .27, 0, human); bx(.064, .02, .064, hair, 0, .305, 0, human);
     human.userData.arms = [aL, aR]; }
 
-  const dinos = [0, 1, 2].map(() => Object.assign(makeDinoModel(), {
-    x: 0, z: 0, a: 0, y: 0, mode: "calm", lost: 0, lastX: 0, lastZ: 0, dist: new Int32Array(W * H), target: -1, refresh: 0, stuck: 0, lastProg: 0,
-    recent: [], hearT: 0, phase: 0, spd: 0, anger: 0, alertT: 0, calmSpd: .3 * PLAYER_SPEED, calmT: 0, gruntT: rr(1, 6), growlT: 0 }));
+  const dinos = []; let dinoSeq = 0;
+  function addDino(id, x, z, a) {
+    const d = Object.assign(makeDinoModel(), { id, x, z, a: a === undefined ? rnd() * 6.28 : a, y: 0, mode: "calm", prevMode: "calm", lost: 0, lastX: 0, lastZ: 0, dist: new Int32Array(W * H), target: -1, refresh: 0, stuck: 0, lastProg: 0,
+      recent: [], hearT: 0, phase: 0, spd: 0, anger: 0, alertT: 0, calmSpd: .3 * PLAYER_SPEED, calmT: 0, gruntT: rr(1, 6), tid: null, dead: 0, busy: 0, net: null });
+    dinos.push(d); return d;
+  }
+  function removeDino(d) { if (d.gv) stopGrowl(d); scene.remove(d.g); const i = dinos.indexOf(d); if (i >= 0) dinos.splice(i, 1); }
 
   function pickWander(d, nearX, nearZ) {
     for (let tries = 0; tries < 60; tries++) {
@@ -1081,18 +1110,17 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
       return;
     }
   }
-  // one always starts at the exit; the other two far from you and from each other
-  function spawnAll() {
-    dinos.forEach(d => { if (d.gv) stopGrowl(d); });
+  // a fresh world: one dinosaur at the exit, the rest far from the start and from each other
+  function spawnAll(count = 3) {
+    while (dinos.length) removeDino(dinos[0]);
     const fromStart = field(idxOf(SX, SZ), new Int32Array(W * H));
-    dinos.forEach((d, k) => {
+    for (let k = 0; k < count; k++) {
       let i;
       if (k === 0) i = nearestNav(idxOf(EX, EZ));
-      else { const far = navCells.filter(c => fromStart[c] > 160 && dinos.slice(0, k).every(o => Math.hypot(cellX(c) - o.x, cellZ(c) - o.z) > 6));
+      else { const far = navCells.filter(c => fromStart[c] > 160 && dinos.every(o => Math.hypot(cellX(c) - o.x, cellZ(c) - o.z) > 6));
         i = far.length ? far[Math.floor(rnd() * far.length)] : navCells[Math.floor(rnd() * navCells.length)]; }
-      Object.assign(d, { x: cellX(i), z: cellZ(i), a: rnd() * 6.28, y: 0, mode: "calm", lost: 0, recent: [], anger: 0, alertT: 0, spd: 0, calmT: 0 });
-      d.g.visible = true; pickWander(d);
-    });
+      pickWander(addDino("d" + (dinoSeq++), cellX(i), cellZ(i)));
+    }
   }
   spawnAll();
 
@@ -1250,26 +1278,30 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
   const dangerEl = document.getElementById("danger"), caughtEl = document.getElementById("caught"), fadeEl = document.getElementById("fade");
   let caughtT = 0;
 
-  function dinoUpdate(d, dt, playerMoving) {
-    const dx = st.x - d.x, dz = st.z - d.z, dPl = Math.hypot(dx, dz);
-    let ang = Math.atan2(dz, dx) - d.a; ang = Math.atan2(Math.sin(ang), Math.cos(ang));
-    const inCone = Math.abs(ang) <= DINO.fov && dPl < DINO.view && lineOfSight(d.x, d.z, st.x, st.z);
-    if (d.mode === "calm" && inCone && playerMoving) { d.mode = "alert"; d.alertT = 0; sScream(d); }
+  // ---- dinosaur brain: runs for a solo game, or on the one player who hosts the shared world ----
+  function dinoAI(d, dt, P) {
+    if (d.dead) { d.spd = 0; return; }
+    if (d.busy > 0) { d.busy -= dt; d.spd = 0; if (d.busy <= 0) { d.mode = "calm"; d.tid = null; d.alertT = 0; pickWander(d); } return; }
+    const sees = p => { const dx = p.x - d.x, dz = p.z - d.z; if (Math.hypot(dx, dz) >= DINO.view) return false;
+      let ang = Math.atan2(dz, dx) - d.a; ang = Math.atan2(Math.sin(ang), Math.cos(ang)); return Math.abs(ang) <= DINO.fov && lineOfSight(d.x, d.z, p.x, p.z); };
+    const near = (a, b) => Math.hypot(a.x - d.x, a.z - d.z) - Math.hypot(b.x - d.x, b.z - d.z);
+    let tp = d.tid != null ? P.find(p => p.id === d.tid) || null : null;
+    if (d.mode === "calm") { d.tid = null; tp = P.filter(p => p.moving && sees(p)).sort(near)[0] || null; if (tp) { d.mode = "alert"; d.alertT = 0; d.tid = tp.id; } }
+    const inCone = !!tp && sees(tp), dPl = tp ? Math.hypot(tp.x - d.x, tp.z - d.z) : 1e9;
     if (d.mode === "alert") {
-      if (inCone) { d.alertT += dt; d.lastX = st.x; d.lastZ = st.z; }
-      else { d.alertT -= dt * .7; if (d.alertT <= 0) { d.alertT = 0; d.mode = "calm"; } }
-      if (d.alertT >= 2) { d.mode = "chase"; d.lost = 0; d.refresh = 0; d.growlT = 0; }
+      if (inCone) { d.alertT += dt; d.lastX = tp.x; d.lastZ = tp.z; }
+      else { d.alertT -= dt * (tp ? .7 : 3); if (d.alertT <= 0) { d.alertT = 0; d.mode = "calm"; d.tid = null; } }
+      if (d.alertT >= 2) { d.mode = "chase"; d.lost = 0; d.refresh = 0; }
     }
     if (d.mode === "chase") {
-      if (inCone) { d.lost = 0; d.lastX = st.x; d.lastZ = st.z; }
-      else { d.lost += dt; if (d.lost >= DINO.forget) { d.mode = "calm"; pickWander(d); } }
+      if (inCone) { d.lost = 0; d.lastX = tp.x; d.lastZ = tp.z; }
+      else { d.lost += dt; if (d.lost >= DINO.forget || !tp) { d.mode = "calm"; d.tid = null; pickWander(d); } }
       d.refresh -= dt;
       if (d.mode === "chase" && d.refresh <= 0) { field(idxOf(d.lastX, d.lastZ), d.dist); d.refresh = .25; }
-      if (d.mode === "chase") { startGrowl(d); updateGrowl(d); } else stopGrowl(d);
     } else if (d.mode === "calm") {
+      // footsteps pull it toward the sound, without making it angry
       d.hearT -= dt;
-      if (playerMoving && st.ground && dPl < DINO.hear && d.hearT <= 0) { pickWander(d, st.x, st.z); d.hearT = 1.2; }
-      d.gruntT -= dt; if (d.gruntT <= 0) { sGrunt(d); d.gruntT = rr(3, 8); }
+      if (d.hearT <= 0) { const h = P.filter(p => p.moving && p.ground && Math.hypot(p.x - d.x, p.z - d.z) < DINO.hear).sort(near)[0]; if (h) { pickWander(d, h.x, h.z); d.hearT = 1.2; } }
     }
     const here = nearestNav(idxOf(d.x, d.z));
     let cur = here, step = here;
@@ -1281,8 +1313,8 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
       if (s === 0 || navLine(d.x, d.z, cellX(step), cellZ(step))) cur = step;
     }
     let tx, tz;
-    const chasingClose = d.mode === "chase" && dPl < 1 && lineOfSight(d.x, d.z, st.x, st.z);
-    if (chasingClose || d.mode === "alert") { tx = st.x; tz = st.z; }
+    const chasingClose = d.mode === "chase" && tp && dPl < 1 && lineOfSight(d.x, d.z, tp.x, tp.z);
+    if (tp && (chasingClose || d.mode === "alert")) { tx = tp.x; tz = tp.z; }
     else if (cur !== here) { tx = cellX(cur); tz = cellZ(cur); }
     else if (d.mode === "chase") { tx = d.lastX; tz = d.lastZ; }
     else { d.stuck += 1; tx = d.x + Math.cos(d.a); tz = d.z + Math.sin(d.a); }
@@ -1299,23 +1331,56 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     d.spd += (target - d.spd) * Math.min(1, dt * 6);
     const sp = d.spd * dt, nx = d.x + Math.cos(d.a) * sp, nz = d.z + Math.sin(d.a) * sp;
     const free = (x, z) => nav[idxOf(x, z)] === 1;
-    const ox = d.x, oz = d.z;
     if (free(nx, d.z)) d.x = nx; if (free(d.x, nz)) d.z = nz;
-    const moved = Math.hypot(d.x - ox, d.z - oz);
     if (d.mode === "calm") {
       const dHere = d.dist[nearestNav(idxOf(d.x, d.z))];
       if (dHere >= 0 && dHere < 4) pickWander(d);
       if (d.calmSpd > .05) d.stuck += dt; if (dHere >= 0 && dHere < d.lastProg - 3) { d.lastProg = dHere; d.stuck = 0; }
       if (d.stuck > 4) pickWander(d);
     }
+  }
+  // on the other players' screens the dinosaur glides toward the state the host sent
+  const MODES = ["calm", "alert", "chase"];
+  function dinoFollow(d, dt) {
+    const n = d.net; if (!n) return;
+    const k = 1 - Math.exp(-dt * 10);
+    if (Math.hypot(n.x - d.x, n.z - d.z) > 2) { d.x = n.x; d.z = n.z; d.a = n.a; }
+    d.x += (n.x - d.x) * k; d.z += (n.z - d.z) * k;
+    d.a += Math.atan2(Math.sin(n.a - d.a), Math.cos(n.a - d.a)) * k;
+    d.mode = MODES[n.m] || "calm"; d.alertT = n.al; d.tid = n.tid; d.lost = n.lo ? 1 : 0;
+    if (n.m === 3 && !d.dead) d.dead = .001;
+  }
+  // what every player sees and hears of a dinosaur: voice, steps, anger, pose, dying, and being caught by it
+  function dinoFx(d, dt, moved) {
+    if (d.mode !== d.prevMode) { if (d.mode === "alert" && !d.dead) sScream(d); d.prevMode = d.mode; }
+    if (d.mode === "chase" && !d.dead) { startGrowl(d); updateGrowl(d); } else if (d.gv) stopGrowl(d);
+    if (d.mode === "calm" && !d.dead) { d.gruntT -= dt; if (d.gruntT <= 0) { sGrunt(d); d.gruntT = rr(3, 8); } }
     const ph = collH[idxOf(d.x, d.z)], gy = ph > 0 && ph < WALLH ? ph : 0;
     d.y += (gy - d.y) * Math.min(1, dt * 8);
     const prevPhase = d.phase; d.phase += moved * 22;
     if (Math.floor(prevPhase / Math.PI) !== Math.floor(d.phase / Math.PI)) sStep(d);
-    const angerTarget = d.mode === "chase" ? 1 : d.mode === "alert" ? Math.min(1, d.alertT / 2) : 0;
+    const angerTarget = d.dead ? 0 : d.mode === "chase" || d.busy > 0 ? 1 : d.mode === "alert" ? Math.min(1, d.alertT / 2) : 0;
     d.anger += (angerTarget - d.anger) * Math.min(1, dt * (angerTarget > d.anger ? 8 : 1.2));
     poseDino(d, d.mode === "chase" ? Math.sin(performance.now() * .02) * .05 : Math.sin(d.phase * .5) * .05);
-    if (dPl < DINO.catchR && st.y < .22) startCatch(d);
+    if (d.dead) { d.dead += dt; d.g.rotation.x = Math.min(1.45, d.dead * 2.4); d.g.position.y -= Math.max(0, d.dead - 1.3) * .3; d.jaw.rotation.z = -.5; return; }
+    if (st.running && !st.won && !cut && Math.hypot(st.x - d.x, st.z - d.z) < DINO.catchR && st.y < .22) startCatch(d);
+  }
+  let localMoving = false;
+  function worldUpdate(dt) {
+    const solo = !NET.on;
+    if (solo && (!st.running || st.won)) return;
+    const sim = solo || NET.host, P = sim ? activePlayers() : null;
+    for (const d of dinos.slice()) {
+      if (cut && cut.d === d) continue;
+      const ox = d.x, oz = d.z;
+      if (sim) dinoAI(d, dt, P); else dinoFollow(d, dt);
+      dinoFx(d, dt, Math.hypot(d.x - ox, d.z - oz));
+      if (sim && d.dead > 2.6) removeDino(d);
+    }
+    if (cut) return;
+    const mine = NET.on ? NET.me : "me";
+    let danger = 0; for (const d of dinos) if (d.tid === mine && !d.dead) danger = Math.max(danger, d.mode === "chase" ? (d.lost > 0 ? .35 : .75) : d.anger * .4);
+    dangerEl.style.opacity = danger;
   }
   function poseDino(d, headWobble) {
     const tt = performance.now() * .001, chase = d.mode === "chase";
@@ -1334,12 +1399,6 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     d.blinkT -= 1 / 60; const shut = d.blinkT < .12 && d.anger < .5; d.lids.forEach(l => l.visible = shut); if (d.blinkT < 0) d.blinkT = rr(2, 6);
     d.g.position.set(d.x, d.y + Math.abs(Math.sin(d.phase)) * .012, d.z); d.g.rotation.y = -d.a;
   }
-  function dinosUpdate(dt, playerMoving) {
-    for (const d of dinos) { dinoUpdate(d, dt, playerMoving); if (cut) return; }
-    let danger = 0; for (const d of dinos) danger = Math.max(danger, d.mode === "chase" ? (d.lost > 0 ? .35 : .75) : d.anger * .4);
-    dangerEl.style.opacity = danger;
-  }
-
   // ---- the catch: a 5-second scene of the dinosaur eating the little person ----
   let cut = null;
   function startCatch(d) {
@@ -1385,8 +1444,197 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     camera.position.set(cx + shake, .45 + shake, cz); camera.lookAt(c.mx, .28, c.mz);
     fadeEl.style.opacity = t > 3.8 ? Math.min(1, (t - 3.8) / 1) : 0;
     if (t > 3.9) caughtEl.hidden = false;
-    if (t >= 5) { cut = null; human.visible = false; restart(); spawnAll(); caughtT = 1.2; fadeEl.style.opacity = 0; }
+    if (t >= 5) { cut = null; human.visible = false; restart(); if (NET.on) { d.net && Object.assign(d, { x: d.net.x, z: d.net.z }); if (NET.host) { d.mode = "calm"; d.tid = null; d.alertT = 0; pickWander(d); } } else spawnAll(); caughtT = 1.2; fadeEl.style.opacity = 0; }
   }
+
+  // ---------- multiplayer ----------
+  // One shared world. Every player sends their own position; the player who joined first hosts the dinosaurs
+  // (if they leave, the next one takes over). There are always players + 2 dinosaurs.
+  const NET = { on: false, me: null, name: "", host: false, ready: false, players: {}, join: 0, backend: null, sendT: 0, beatT: 0, dinoT: 0, ensureT: 0, last: "" };
+  const keyOf = name => name.trim().toLowerCase().replace(/[.#$\[\]\/\s]+/g, "_").slice(0, 16);
+  async function hashCode(key, code) {
+    const txt = key + ":" + code;
+    try { const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(txt)); return Array.from(new Uint8Array(b)).map(v => v.toString(16).padStart(2, "0")).join(""); }
+    catch (e) { let h = 5381; for (let i = 0; i < txt.length; i++) h = (h * 33 ^ txt.charCodeAt(i)) >>> 0; return "x" + h.toString(16); }
+  }
+  // --- Firebase Realtime Database backend ---
+  function makeFirebase(cfg) {
+    const fb = window.firebase; fb.initializeApp(cfg); const db = fb.database(); let meRef = null, lastMe = null, offset = 0;
+    db.ref(".info/serverTimeOffset").on("value", s => { offset = s.val() || 0; });
+    return {
+      now: () => Date.now() + offset,
+      async login(key, name, h) {
+        const ref = db.ref("users/" + key);
+        const res = await ref.transaction(cur => cur === null ? { name, h, c: fb.database.ServerValue.TIMESTAMP } : undefined);
+        const u = res.snapshot.val(); if (!u || u.h !== h) return { ok: false };
+        return { ok: true, best: u.best || null, isNew: res.committed };
+      },
+      join(key, h) {
+        meRef = db.ref("presence/" + key);
+        db.ref(".info/connected").on("value", s => { if (s.val()) { meRef.onDisconnect().remove(); if (lastMe) meRef.set(lastMe); } });
+        // child events, so each move costs one small record instead of the whole list
+        const map = {}, pr = db.ref("presence"), put = s => { map[s.key] = s.val(); h.players(map); };
+        pr.on("child_added", put); pr.on("child_changed", put); pr.on("child_removed", s => { delete map[s.key]; h.players(map); });
+        pr.once("value", () => h.players(map));
+        db.ref("world/d").on("value", s => h.dinos(s.val() || {}));
+      },
+      setMe(data) { lastMe = data; if (meRef) meRef.set(data); },
+      setDinos(obj) { db.ref("world/d").set(obj); },
+      async saveBest(key, t) { await db.ref("users/" + key + "/best").transaction(cur => (cur === null || t < cur) ? t : undefined); },
+      async top() { const s = await db.ref("users").orderByChild("best").startAt(0.1).limitToFirst(10).get(); const out = []; s.forEach(c => { const v = c.val(); if (v && v.best) out.push({ name: v.name, best: v.best }); }); return out; }
+    };
+  }
+  // --- same-browser backend (address ends with #local): tabs of one browser play together, no server needed ---
+  function makeLocal() {
+    const ch = new BroadcastChannel("sticker-maze"), seen = {}; let h = null, myKey = null, lastMe = null, world = {};
+    const users = () => { try { return JSON.parse(localStorage.getItem("sticker-maze-users") || "{}"); } catch (e) { return {}; } };
+    const save = u => { try { localStorage.setItem("sticker-maze-users", JSON.stringify(u)); } catch (e) {} };
+    const push = () => { if (!h) return; const now = Date.now(), map = {}; for (const k in seen) { if (now - seen[k].at > 4000) delete seen[k]; else map[k] = seen[k].data; } if (lastMe) map[myKey] = lastMe; h.players(map); };
+    ch.onmessage = e => { const m = e.data;
+      if (m.k === "p") { seen[m.key] = { data: m.data, at: Date.now() }; push(); }
+      else if (m.k === "bye") { delete seen[m.key]; push(); }
+      else if (m.k === "hello") { if (lastMe) ch.postMessage({ k: "p", key: myKey, data: lastMe }); if (NET.host) ch.postMessage({ k: "d", obj: world }); }
+      else if (m.k === "d") { world = m.obj; if (h) h.dinos(m.obj); } };
+    addEventListener("pagehide", () => { if (myKey) ch.postMessage({ k: "bye", key: myKey }); });
+    setInterval(push, 1000);
+    return {
+      now: () => Date.now(),
+      async login(key, name, hsh) { const u = users(); if (!u[key]) { u[key] = { name, h: hsh }; save(u); return { ok: true, best: null, isNew: true }; } if (u[key].h !== hsh) return { ok: false }; return { ok: true, best: u[key].best || null }; },
+      join(key, handlers) { myKey = key; h = handlers; ch.postMessage({ k: "hello" }); setTimeout(() => { h.dinos(world); push(); }, 400); },
+      setMe(data) { lastMe = data; ch.postMessage({ k: "p", key: myKey, data }); },
+      setDinos(obj) { world = obj; ch.postMessage({ k: "d", obj }); },
+      async saveBest(key, t) { const u = users(); if (u[key] && (!u[key].best || t < u[key].best)) { u[key].best = t; save(u); } },
+      async top() { return Object.values(users()).filter(v => v.best).sort((a, b) => a.best - b.best).slice(0, 10).map(v => ({ name: v.name, best: v.best })); }
+    };
+  }
+  const loadScript = src => new Promise((ok, no) => { const s = document.createElement("script"); s.src = src; s.onload = ok; s.onerror = no; document.head.appendChild(s); });
+  const backendReady = (async () => {
+    try {
+      if (window.FIREBASE_CONFIG && window.FIREBASE_CONFIG.databaseURL) {
+        await loadScript("https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js");
+        await loadScript("https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js");
+        return makeFirebase(window.FIREBASE_CONFIG);
+      }
+      if (/local/.test(location.hash) && window.BroadcastChannel) return makeLocal();
+    } catch (e) {}
+    return null;
+  })();
+
+  // --- other players: a little person with a name above ---
+  function makeAvatar(name) {
+    const g = new THREE.Group(); let hsh = 0; for (const ch of name) hsh = (hsh * 31 + ch.charCodeAt(0)) >>> 0;
+    const shirt = dm(new THREE.Color().setHSL((hsh % 360) / 360, .65, .5).getHex()), skin = dm(0xf0c8a0), pants = dm(0x2a2e3a), hair = dm(0x3a2a1a);
+    const legL = bx(.035, .12, .035, pants, 0, .06, .025, g), legR = bx(.035, .12, .035, pants, 0, .06, -.025, g);
+    bx(.05, .12, .09, shirt, 0, .18, 0, g); bx(.025, .1, .025, shirt, 0, .19, .06, g); bx(.025, .1, .025, shirt, 0, .19, -.06, g);
+    bx(.06, .06, .06, skin, 0, .27, 0, g); bx(.064, .02, .064, hair, 0, .305, 0, g); bx(.012, .012, .03, pants, .031, .275, 0, g);
+    const cv = document.createElement("canvas"); cv.width = 256; cv.height = 64; const c = cv.getContext("2d");
+    c.font = "bold 34px sans-serif"; c.textAlign = "center"; c.textBaseline = "middle"; const w = Math.min(244, c.measureText(name).width + 24);
+    c.fillStyle = "rgba(20,22,16,.7)"; c.fillRect(128 - w / 2, 8, w, 48); c.fillStyle = "#fffbe8"; c.fillText(name, 128, 34, 236);
+    const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthWrite: false })); label.scale.set(.44, .11, 1); label.position.y = .43; g.add(label);
+    g.scale.setScalar(1.3); scene.add(g); return { g, legL, legR };
+  }
+  function activePlayers() {
+    const L = [];
+    if (st.running && !st.won && !cut) L.push({ id: NET.on ? NET.me : "me", x: st.x, z: st.z, moving: localMoving, ground: st.ground });
+    if (NET.on) for (const p of Object.values(NET.players)) if (p.s === 1) L.push({ id: p.key, x: p.x, z: p.z, moving: performance.now() < p.movingUntil, ground: p.y < .03 });
+    return L;
+  }
+  const onlineEl = document.getElementById("online"), onlineWrap = document.getElementById("onlineWrap");
+  function onPlayers(map) {
+    const now = performance.now();
+    for (const key in map) { if (key === NET.me) continue; const v = map[key]; if (!v || typeof v.x !== "number") continue;
+      let p = NET.players[key];
+      if (!p) p = NET.players[key] = { key, name: String(v.n || key).slice(0, 16), x: v.x, z: v.z, a: v.a, y: v.y || 0, tx: v.x, tz: v.z, ta: v.a, movingUntil: 0, walk: 0, av: makeAvatar(String(v.n || key).slice(0, 16)) };
+      if (Math.hypot(v.x - p.tx, v.z - p.tz) > .01) p.movingUntil = now + 450;
+      p.tx = v.x; p.tz = v.z; p.ta = v.a; p.y = v.y || 0; p.s = v.s; p.e = v.e || null; p.j = v.j || 0;
+    }
+    for (const key in NET.players) if (!(key in map)) { scene.remove(NET.players[key].av.g); delete NET.players[key]; }
+    // the earliest joiner hosts the dinosaurs
+    let hostKey = NET.me, hostJ = NET.join;
+    for (const p of Object.values(NET.players)) if (p.j && (p.j < hostJ || (p.j === hostJ && p.key < hostKey))) { hostKey = p.key; hostJ = p.j; }
+    const was = NET.host; NET.host = hostKey === NET.me; NET.ready = true;
+    if (NET.host && !was) becomeHost();
+    onlineEl.textContent = Object.keys(NET.players).length + 1;
+  }
+  function onDinos(obj) {
+    NET.gotWorld = true;
+    if (NET.host) return;
+    for (const id in obj) { const v = obj[id]; if (!Array.isArray(v)) continue;
+      let d = dinos.find(q => q.id === id); if (!d) d = addDino(id, v[0], v[1], v[2]);
+      d.net = { x: v[0], z: v[1], a: v[2], m: v[3], al: v[4], tid: v[5] || null, lo: v[6] }; }
+    for (const d of dinos.slice()) if (!(d.id in obj) && !(cut && cut.d === d)) removeDino(d);
+  }
+  function becomeHost() {
+    // take over whatever dinosaurs exist; an empty world gets a fresh set
+    for (const d of dinos) { d.net = null; if (!d.dead) { d.mode = "calm"; d.tid = null; d.alertT = 0; pickWander(d); } const n = parseInt(d.id.slice(1)); if (n >= dinoSeq) dinoSeq = n + 1; }
+    NET.ensureT = 1.2;
+  }
+  function hostEnsure() {
+    const want = Object.keys(NET.players).length + 3, alive = dinos.filter(d => !d.dead), free = alive.filter(d => d.busy <= 0 && !(cut && cut.d === d));
+    if (!dinos.length) { spawnAll(want); return; }
+    if (alive.length < want) pickWander(addDino("d" + (dinoSeq++), cellX(nearestNav(idxOf(EX, EZ))), cellZ(nearestNav(idxOf(EX, EZ)))));   // a newcomer appears at the exit
+    else if (alive.length > want && free.length) { const d = free[Math.floor(Math.random() * free.length)]; d.dead = .001; d.mode = "calm"; d.tid = null; }   // someone left: one dies
+    // a dinosaur that is eating someone stands still
+    for (const p of Object.values(NET.players)) if (p.e) { const d = dinos.find(q => q.id === p.e); if (d && !d.dead) { d.busy = 1; d.mode = "chase"; d.tid = p.key; } }
+  }
+  const r2 = v => Math.round(v * 100) / 100;
+  function netTick(dt) {
+    if (!NET.on) return;
+    // other players' figures
+    const k = 1 - Math.exp(-dt * 10);
+    for (const p of Object.values(NET.players)) {
+      const ox = p.x, oz = p.z; p.x += (p.tx - p.x) * k; p.z += (p.tz - p.z) * k; p.a += Math.atan2(Math.sin(p.ta - p.a), Math.cos(p.ta - p.a)) * k;
+      p.walk += Math.hypot(p.x - ox, p.z - oz) * 22; p.av.legL.rotation.z = Math.sin(p.walk) * .7; p.av.legR.rotation.z = -Math.sin(p.walk) * .7;
+      p.av.g.visible = p.s === 1; p.av.g.position.set(p.x, p.y, p.z); p.av.g.rotation.y = -p.a;
+    }
+    // my own state, sent when it changes and as a heartbeat
+    NET.sendT -= dt; NET.beatT -= dt;
+    if (NET.sendT <= 0) {
+      const s = cut ? 2 : st.won ? 3 : st.running ? 1 : 0;
+      const me = { n: NET.name, x: r2(st.x), z: r2(st.z), a: r2(st.a), y: r2(st.y), s, e: cut ? cut.d.id : null, j: NET.join };
+      const sig = JSON.stringify(me);
+      if (sig !== NET.last || NET.beatT <= 0) { NET.backend.setMe(me); NET.last = sig; NET.beatT = 1; }
+      NET.sendT = .14;
+    }
+    if (NET.host && NET.ready) {
+      NET.ensureT -= dt; if (NET.ensureT <= 0) { NET.ensureT = .6; hostEnsure(); }
+      NET.dinoT -= dt;
+      if (NET.dinoT <= 0) { NET.dinoT = .16; const o = {};
+        for (const d of dinos) o[d.id] = [r2(d.x), r2(d.z), r2(d.a), d.dead ? 3 : MODES.indexOf(d.mode), r2(d.alertT), d.tid || 0, d.lost > 0 ? 1 : 0];
+        NET.backend.setDinos(o); }
+    }
+  }
+  function resetWorld() { if (!NET.on) spawnAll(); }
+  async function showTop() {
+    const el = document.getElementById("top"); el.textContent = "";
+    if (!NET.on) return;
+    try { const list = await NET.backend.top(); for (const r of list) { const li = document.createElement("li"); li.textContent = r.name + " — " + fmt(r.best); el.appendChild(li); } } catch (e) {}
+  }
+  // --- signing in ---
+  const loginForm = document.getElementById("login"), nameEl = document.getElementById("pname"), codeEl = document.getElementById("pcode"), msgEl = document.getElementById("loginMsg"), netFields = document.getElementById("netFields");
+  try { nameEl.value = localStorage.getItem("sticker-maze-name") || ""; } catch (e) {}
+  backendReady.then(b => { NET.backend = b; netFields.hidden = !b; document.getElementById("soloNote").hidden = !!b; });
+  let loggingIn = false;
+  loginForm.addEventListener("submit", async e => {
+    e.preventDefault(); if (loggingIn || intro.hidden) return;
+    audioInit();
+    if (!NET.backend) { begin(); return; }
+    const name = nameEl.value.trim(), code = codeEl.value.trim(), key = keyOf(name);
+    if (!key) { msgEl.textContent = "Введите имя."; nameEl.focus(); return; }
+    if (!/^\d{4}$/.test(code)) { msgEl.textContent = "Код — это четыре цифры."; codeEl.focus(); return; }
+    loggingIn = true; msgEl.textContent = "Входим…";
+    try {
+      const res = await NET.backend.login(key, name, await hashCode(key, code));
+      if (!res.ok) { msgEl.textContent = "Неверный код, либо игрок с таким именем уже есть. Введите правильный код или выберите другое имя."; loggingIn = false; codeEl.select(); return; }
+      try { localStorage.setItem("sticker-maze-name", name); } catch (err) {}
+      NET.me = key; NET.name = name; NET.join = NET.backend.now(); NET.on = true;
+      while (dinos.length) removeDino(dinos[0]);   // the shared world replaces the private one
+      NET.backend.join(key, { players: onPlayers, dinos: onDinos });
+      onlineWrap.hidden = false; msgEl.textContent = "";
+      begin();
+    } catch (err) { msgEl.textContent = "Не получилось связаться с сервером. Проверьте интернет и попробуйте ещё раз."; }
+    loggingIn = false;
+  });
 
   // ---------- minimap ----------
   const mini = document.getElementById("mini"), mg = mini.getContext("2d");
@@ -1405,6 +1653,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     mg.putImageData(mimg, 0, 0);
     if (st.rev[((MAZE.exit[1] / REV) | 0) * RW + ((MAZE.exit[0] / REV) | 0)]) { mg.fillStyle = "#1b6fd1"; mg.font = "bold 22px sans-serif"; mg.textAlign = "center"; mg.textBaseline = "middle"; mg.fillText("E", EX * K, EZ * K); }
     for (const d of dinos) { mg.fillStyle = d.mode === "chase" ? "#ff2a1a" : d.mode === "alert" ? "#ff9a2a" : "#2f8f7a"; mg.beginPath(); mg.arc(d.x * K, d.z * K, 5, 0, 7); mg.fill(); }
+    if (NET.on) for (const p of Object.values(NET.players)) if (p.s === 1) { mg.fillStyle = "#1b6fd1"; mg.beginPath(); mg.arc(p.x * K, p.z * K, 4, 0, 7); mg.fill(); }
     mg.save(); mg.translate(st.x * K, st.z * K); mg.rotate(st.a);
     mg.fillStyle = "#d1321b"; mg.beginPath(); mg.moveTo(9, 0); mg.lineTo(-6, -6); mg.lineTo(-6, 6); mg.closePath(); mg.fill();
     mg.restore();
@@ -1429,7 +1678,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
   let last = performance.now(), hudT = 0;
   function frame(now) {
     const dt = Math.min(.05, (now - last) / 1000); last = now;
-    update(dt); blendEnv(dt); updateTorches(now);
+    update(dt); worldUpdate(dt); netTick(dt); blendEnv(dt); updateTorches(now);
     landBob *= Math.exp(-dt * 10);
     const y = EYE + st.y - landBob + (reduce || !st.ground ? 0 : Math.sin(bob) * .015);
     if (!cut) { camera.position.set(st.x, y, st.z); camera.lookAt(st.x + Math.cos(st.a), y + Math.tan(pitch), st.z + Math.sin(st.a)); }
