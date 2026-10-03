@@ -190,7 +190,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     return ((a * (1 - fx) + b * fx) * (1 - fz) + (c * (1 - fx) + d * fx) * fz) / 100;
   }
   const SX = (MAZE.start[0] + .5) / K, SZ = (MAZE.start[1] + .5) / K;
-  const SAFE_CELLS = 20, safe = new Uint8Array(W * H);
+  const SAFE_CELLS = 12, safe = new Uint8Array(W * H);
   { const dist = new Int16Array(W * H).fill(-1), q = [MAZE.start[1] * W + MAZE.start[0]]; dist[q[0]] = 0; safe[q[0]] = 1;
     for (let h = 0; h < q.length; h++) { const i = q[h], c = i % W; if (dist[i] >= SAFE_CELLS) continue;
       for (const n of [i - 1, i + 1, i - W, i + W]) { if (n < 0 || n >= W * H || Math.abs((n % W) - c) > 1 || bits[n] || dist[n] >= 0) continue; dist[n] = dist[i] + 1; safe[n] = 1; q.push(n); } } }
@@ -1115,27 +1115,51 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
   function removeDino(d) { if (d.gv) stopGrowl(d); scene.remove(d.g); const i = dinos.indexOf(d); if (i >= 0) dinos.splice(i, 1); }
 
   const START_SHY = 3.5;   // dinosaurs do not pick spots this close to the start
+  // Even spread: the maze is split into as many territories as there are dinosaurs, and each one roams its own.
+  // Territories follow walking distance, not straight lines, so each is one connected piece of corridors.
+  const terr = { n: 0, cells: [], seed: [], label: new Int8Array(W * H).fill(-1), dseed: new Int32Array(W * H) };
+  const shy = new Uint8Array(W * H); for (const i of navCells) if (Math.hypot(cellX(i) - SX, cellZ(i) - SZ) < START_SHY) shy[i] = 1;
+  function buildTerritories(n) {
+    const tmp = new Int32Array(W * H), label = terr.label, dseed = terr.dseed;
+    const assign = seeds => { label.fill(-1); dseed.fill(1 << 30);
+      seeds.forEach((sd, k) => { field(sd, tmp); for (const i of navCells) if (tmp[i] >= 0 && tmp[i] < dseed[i]) { dseed[i] = tmp[i]; label[i] = k; } }); };
+    // seeds as far from each other as the corridors allow
+    // (the first one is always at the exit, so the same number of dinosaurs always gives the same map of territories)
+    const seeds = [nearestNav(idxOf(EX, EZ))]; dseed.fill(1 << 30);
+    for (let k = 1; k <= n; k++) { field(seeds[k - 1], tmp); for (const i of navCells) if (tmp[i] >= 0 && tmp[i] < dseed[i]) dseed[i] = tmp[i];
+      if (k < n) { let bi = -1; for (const i of navCells) if (!shy[i] && (bi < 0 || dseed[i] > dseed[bi])) bi = i; seeds.push(bi); } }
+    // then pull each seed to the middle of its territory, twice
+    for (let it = 0; it < 2; it++) { assign(seeds);
+      const sx = new Float64Array(n), sz = new Float64Array(n), cnt = new Int32Array(n);
+      for (const i of navCells) { const k = label[i]; if (k >= 0) { sx[k] += cellX(i); sz[k] += cellZ(i); cnt[k]++; } }
+      const best = new Float64Array(n).fill(1e9);
+      for (const i of navCells) { const k = label[i]; if (k < 0 || shy[i]) continue; const dd = (cellX(i) - sx[k] / cnt[k]) ** 2 + (cellZ(i) - sz[k] / cnt[k]) ** 2; if (dd < best[k]) { best[k] = dd; seeds[k] = i; } } }
+    assign(seeds);
+    const cells = seeds.map(() => []); for (let q = 0; q < navCells.length; q += 5) { const i = navCells[q]; if (label[i] >= 0 && !shy[i]) cells[label[i]].push(i); }
+    terr.n = n; terr.cells = cells; terr.seed = seeds;
+    // hand territories out so that the total walk is short: nearest free dinosaur first
+    const alive = dinos.filter(d => !d.dead), pairs = [];
+    alive.forEach(d => { d.home = -1; for (let k = 0; k < n; k++) pairs.push([Math.hypot(d.x - cellX(seeds[k]), d.z - cellZ(seeds[k])), d, k]); });
+    pairs.sort((p, q) => p[0] - q[0]); const taken = new Set();
+    for (const [, d, k] of pairs) if (d.home < 0 && !taken.has(k)) { d.home = k; taken.add(k); }
+  }
+  const atHome = d => d.home != null && d.home >= 0 && d.home < terr.n && terr.label[nearestNav(idxOf(d.x, d.z))] === d.home;
   function pickWander(d, nearX, nearZ) {
     let chosen = -1;
     if (nearX !== undefined) { const i = nearestNav(idxOf(nearX + rr(-1, 1), nearZ + rr(-1, 1))); if (Math.hypot(cellX(i) - SX, cellZ(i) - SZ) > 2) chosen = i; }
     if (chosen < 0) {
-      // of several random spots take the one farthest from the other dinosaurs and from where they are heading
-      let bestScore = -1;
-      for (let tries = 0, got = 0; tries < 80 && got < 8; tries++) {
-        const i = navCells[Math.floor(rnd() * navCells.length)], tx = cellX(i), tz = cellZ(i);
-        if (Math.hypot(tx - d.x, tz - d.z) < 4 || Math.hypot(tx - SX, tz - SZ) < START_SHY) continue;
-        if (d.recent.some(p => Math.hypot(tx - p[0], tz - p[1]) < 3)) continue;
-        got++; let score = 40;
-        for (const o of dinos) { if (o === d || o.dead) continue; score = Math.min(score, Math.hypot(tx - o.x, tz - o.z)); if (o.target >= 0) score = Math.min(score, Math.hypot(tx - cellX(o.target), tz - cellZ(o.target))); }
-        score += rnd() * 2;
-        if (score > bestScore) { bestScore = score; chosen = i; }
-      }
-      if (chosen < 0) chosen = navCells[Math.floor(rnd() * navCells.length)];
-      d.recent.push([cellX(chosen), cellZ(chosen)]); if (d.recent.length > 6) d.recent.shift();
+      const n = dinos.filter(q => !q.dead).length;
+      if (n !== terr.n || d.home == null || d.home < 0 || d.home >= terr.n) buildTerritories(Math.max(1, n));
+      const mine = terr.cells[d.home] && terr.cells[d.home].length ? terr.cells[d.home] : navCells;
+      // a random spot inside its own territory: of three, the one deepest inside, so neighbours rarely meet at the borders
+      for (let tries = 0; tries < 30; tries++) {
+        let i = mine[Math.floor(rnd() * mine.length)];
+        for (let k = 0; k < 2; k++) { const j = mine[Math.floor(rnd() * mine.length)]; if (terr.dseed[j] < terr.dseed[i]) i = j; }
+        const tx = cellX(i), tz = cellZ(i);
+        chosen = i; if (Math.hypot(tx - d.x, tz - d.z) > 1.5 && !d.recent.some(p => Math.hypot(tx - p[0], tz - p[1]) < 1)) break; }
+      d.recent.push([cellX(chosen), cellZ(chosen)]); if (d.recent.length > 4) d.recent.shift();
     }
     field(chosen, d.dist);
-    const here = d.dist[nearestNav(idxOf(d.x, d.z))];
-    if (here < 0) { field(navCells[Math.floor(rnd() * navCells.length)], d.dist); }
     d.target = chosen; d.stuck = 0; d.lastProg = d.dist[nearestNav(idxOf(d.x, d.z))];
   }
   // a fresh world: one dinosaur at the exit, the rest far from the start and from each other
@@ -1351,6 +1375,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     d.a += Math.max(-turnRate * dt, Math.min(turnRate * dt, diff));
     d.calmT -= dt;
     if (d.calmT <= 0) { d.calmT = rr(2, 6); d.calmSpd = rnd() < .25 ? 0 : rr(.1, .5) * PLAYER_SPEED; }
+    if (d.mode === "calm" && !atHome(d)) d.calmSpd = .5 * PLAYER_SPEED;
     const isProp = (x, z) => { const h = collH[idxOf(x, z)]; return h > 0 && h < WALLH; };
     const onProp = isProp(d.x, d.z) || isProp(d.x + Math.cos(d.a) * .12, d.z + Math.sin(d.a) * .12);
     let target = d.mode === "chase" ? ((Math.abs(diff) > .35 || onProp) ? DINO.chaseSlow : DINO.chaseFast) : d.mode === "alert" ? 0 : d.calmSpd;
@@ -1600,9 +1625,14 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     NET.ensureT = 1.2;
   }
   function relocateDino() {
-    const free = dinos.filter(d => !d.dead && d.busy <= 0 && d.mode === "calm" && !(cut && cut.d === d));
+    const i = nearestNav(idxOf(EX, EZ)), k = terr.label[i];
+    let free = dinos.filter(d => !d.dead && d.busy <= 0 && d.mode === "calm" && !(cut && cut.d === d));
+    const others = free.filter(d => d.home !== k); if (others.length) free = others;   // not the one already guarding the exit
     if (!free.length) return;
-    const d = free[Math.floor(Math.random() * free.length)], i = nearestNav(idxOf(EX, EZ));
+    const d = free[Math.floor(Math.random() * free.length)];
+    // it takes over the territory around the exit; the previous owner moves to the one it left
+    const owner = dinos.find(o => o !== d && !o.dead && o.home === k);
+    if (k >= 0 && owner) { owner.home = d.home; d.home = k; if (owner.mode === "calm") pickWander(owner); }
     Object.assign(d, { x: cellX(i), z: cellZ(i), y: 0, a: rnd() * 6.28, spd: 0, tid: null, alertT: 0, recent: [] }); pickWander(d);
   }
   function hostEnsure() {
