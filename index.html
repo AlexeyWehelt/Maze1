@@ -914,13 +914,21 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
 
   // ---------- dinosaurs ----------
   const PLAYER_SPEED = 1.5;
-  const DINO = { chaseFast: 1.1 * PLAYER_SPEED, chaseSlow: .8 * PLAYER_SPEED, fov: Math.PI / 4, view: 7, hear: 4, forget: 5, catchR: .2, hearRange: 9 };
+  const DINO = { chaseFast: 1.1 * PLAYER_SPEED, chaseSlow: .8 * PLAYER_SPEED, squeeze: .2 * PLAYER_SPEED, fov: Math.PI / 4, view: 7, hear: 4, forget: 5, catchR: .2, hearRange: 9 };
   // walkable cells for dinosaurs: free cells with no wall directly beside them (props don't stop them),
   // which keeps every part of the maze reachable through the narrowest gaps; the start zone is off limits
   const nav = new Uint8Array(W * H);
   for (let r = 1; r < H - 1; r++) for (let c = 1; c < W - 1; c++) { const i = r * W + c;
     nav[i] = !bits[i] && !bits[i - 1] && !bits[i + 1] && !bits[i - W] && !bits[i + W] && !safe[i] ? 1 : 0; }
   const navCells = []; for (let i = 0; i < W * H; i++) if (nav[i]) navCells.push(i);
+  // tight gaps: places with a wall touching every nearby cell. A dinosaur has to squeeze through them slowly.
+  const squeeze = new Uint8Array(W * H);
+  { const roomy = new Uint8Array(W * H);   // cells with no wall in the 3x3 around them
+    for (let r = 1; r < H - 1; r++) for (let c = 1; c < W - 1; c++) { let ok = 1; for (let dr = -1; ok && dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) if (bits[(r + dr) * W + c + dc]) { ok = 0; break; } roomy[r * W + c] = ok; }
+    const R = 4;
+    for (let r = 2; r < H - 2; r++) for (let c = 2; c < W - 2; c++) { const i = r * W + c; if (!nav[i]) continue;
+      let tight = 1; for (let dr = -1; tight && dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) if (roomy[i + dr * W + dc]) { tight = 0; break; }
+      if (tight) for (let dr = -R; dr <= R; dr++) for (let dc = -R; dc <= R; dc++) { const rr2 = r + dr, cc = c + dc; if (rr2 >= 0 && cc >= 0 && rr2 < H && cc < W) squeeze[rr2 * W + cc] = 1; } } }
   function nearestNav(i) {
     if (nav[i]) return i; const r0 = (i / W) | 0, c0 = i % W;
     for (let rad = 1; rad < 8; rad++) for (let dr = -rad; dr <= rad; dr++) for (let dc = -rad; dc <= rad; dc++) {
@@ -1381,6 +1389,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     let target = d.mode === "chase" ? ((Math.abs(diff) > .35 || onProp) ? DINO.chaseSlow : DINO.chaseFast) : d.mode === "alert" ? 0 : d.calmSpd;
     if (Math.abs(diff) > 1.4) target *= .3;
     if (d.mode === "chase" && onProp && d.spd > DINO.chaseSlow) d.spd = DINO.chaseSlow;
+    if (squeeze[idxOf(d.x, d.z)]) { target = Math.min(target, DINO.squeeze); d.spd = Math.min(d.spd, DINO.squeeze); }   // squeezing through a tight gap
     d.spd += (target - d.spd) * Math.min(1, dt * 6);
     const sp = d.spd * dt, nx = d.x + Math.cos(d.a) * sp, nz = d.z + Math.sin(d.a) * sp;
     const free = (x, z) => nav[idxOf(x, z)] === 1;
