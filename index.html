@@ -130,7 +130,7 @@ button { font: inherit; cursor: pointer; }
   <div class="overlay" id="intro">
     <div class="card">
       <h1>Лабиринт со стикера</h1>
-      <p>Найдите выход — синюю букву E. По лабиринту бродят динозавры: они видят перед собой и слышат шаги, а вы слышите их, так что включите звук. Заметив вас, динозавр замирает и наливается багровым, а через пару секунд бросается в погоню. Поймает — начнёте сначала. Мир общий: с каждым новым игроком у выхода появляется ещё один динозавр.</p>
+      <p>Найдите выход — синюю букву E. По лабиринту бродят динозавры: они видят перед собой и слышат шаги, а вы слышите их, так что включите звук. Заметив вас, динозавр замирает и наливается багровым, а через пару секунд бросается в погоню. Поймает — начнёте сначала. У старта, под буквой S, голубая безопасная зона: туда динозавры не заходят и вас там не видят. Мир общий: с каждым новым игроком у выхода появляется ещё один динозавр.</p>
       <form id="login" class="login" novalidate>
         <div id="netFields" hidden>
           <label for="pname">Имя<input id="pname" name="pname" maxlength="16" autocomplete="username" autocapitalize="off" spellcheck="false"></label>
@@ -190,6 +190,11 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     return ((a * (1 - fx) + b * fx) * (1 - fz) + (c * (1 - fx) + d * fx) * fz) / 100;
   }
   const SX = (MAZE.start[0] + .5) / K, SZ = (MAZE.start[1] + .5) / K;
+  const SAFE_CELLS = 20, safe = new Uint8Array(W * H);
+  { const dist = new Int16Array(W * H).fill(-1), q = [MAZE.start[1] * W + MAZE.start[0]]; dist[q[0]] = 0; safe[q[0]] = 1;
+    for (let h = 0; h < q.length; h++) { const i = q[h], c = i % W; if (dist[i] >= SAFE_CELLS) continue;
+      for (const n of [i - 1, i + 1, i - W, i + W]) { if (n < 0 || n >= W * H || Math.abs((n % W) - c) > 1 || bits[n] || dist[n] >= 0) continue; dist[n] = dist[i] + 1; safe[n] = 1; q.push(n); } } }
+  const safeAt = (x, z) => safe[Math.max(0, Math.min(H - 1, Math.floor(z * K))) * W + Math.max(0, Math.min(W - 1, Math.floor(x * K)))] === 1;
   const EX = (MAZE.exit[0] + .5) / K, EZ = (MAZE.exit[1] + .5) / K;
   const EYE = 0.42, RAD = 0.085;
 
@@ -392,6 +397,10 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     27: (x, y) => { fg.fillStyle = rnd() < .3 ? "rgba(120,170,220,.35)" : "rgba(20,26,34,.4)"; fg.fillRect(x, y, rr(1, 3), rr(1, 3)); }
   };
   for (let i = 0; i < 150000; i++) { const x = rnd() * fcv.width, y = rnd() * fcv.height, z = zAtPx(x, y); (VAR_DETAIL[z] || FLOOR_DETAIL[z >> 2])(x, y); }
+  fg.fillStyle = "rgba(40,190,255,.5)";
+  for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) if (safe[r * W + c]) fg.fillRect(c * FS, r * FS, FS + .5, FS + .5);
+  fg.fillStyle = "rgba(255,255,255,.55)";
+  for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) if (safe[r * W + c] && [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dc, dr]) => { const n = (r + dr) * W + c + dc; return !bits[n] && !safe[n]; })) fg.fillRect(c * FS, r * FS, FS + .5, FS + .5);
   const floorTex = new THREE.CanvasTexture(fcv); floorTex.anisotropy = maxAniso;
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(W / K, H / K), new THREE.MeshLambertMaterial({ map: floorTex }));
   floor.rotation.x = -Math.PI / 2; floor.position.set(W / K / 2, 0, H / K / 2); scene.add(floor);
@@ -717,6 +726,17 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
   const sun = new THREE.DirectionalLight(0xfff4e0, .4); sun.position.set(-3, 6, -2); scene.add(sun);
   const torch = new THREE.PointLight(0xffb070, 0, 3.2, 1.4); scene.add(torch);
 
+  // ---------- start: an S floating above the starting point ----------
+  const sCv = document.createElement("canvas"); sCv.width = sCv.height = 256; const sg2 = sCv.getContext("2d");
+  const drawS = f => { sg2.clearRect(0, 0, 256, 256); sg2.shadowColor = "#bff0ff"; sg2.shadowBlur = 24; sg2.fillStyle = "#18b4f0"; sg2.font = `bold 220px ${f}`; sg2.textAlign = "center"; sg2.textBaseline = "middle"; sg2.fillText("S", 128, 140); };
+  drawS("'Segoe Print', cursive");
+  const sTex = new THREE.CanvasTexture(sCv);
+  const sSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: sTex, transparent: true, fog: false }));
+  sSprite.scale.set(.4, .4, 1); sSprite.position.set(SX, .82, SZ); scene.add(sSprite);
+  const sRing = new THREE.Mesh(new THREE.RingGeometry(.2, .25, 40), new THREE.MeshBasicMaterial({ color: 0x18b4f0, transparent: true, opacity: .85, side: THREE.DoubleSide }));
+  sRing.rotation.x = -Math.PI / 2; sRing.position.set(SX, .006, SZ); scene.add(sRing);
+  document.fonts && document.fonts.load("700 100px Caveat").then(() => { drawS("'Caveat', cursive"); sTex.needsUpdate = true; }).catch(() => {});
+
   // ---------- exit ----------
   const exitG = new THREE.Group(); exitG.position.set(EX, 0, EZ); scene.add(exitG);
   const eCv = document.createElement("canvas"); eCv.width = eCv.height = 256; const eg = eCv.getContext("2d");
@@ -895,13 +915,11 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
   // ---------- dinosaurs ----------
   const PLAYER_SPEED = 1.5;
   const DINO = { chaseFast: 1.1 * PLAYER_SPEED, chaseSlow: .8 * PLAYER_SPEED, fov: Math.PI / 4, view: 7, hear: 4, forget: 5, catchR: .2, hearRange: 9 };
-  // walkable cells for dinosaurs: free cells at least one cell away from walls (props don't stop them)
+  // walkable cells for dinosaurs: free cells with no wall directly beside them (props don't stop them),
+  // which keeps every part of the maze reachable through the narrowest gaps; the start zone is off limits
   const nav = new Uint8Array(W * H);
-  for (let r = 1; r < H - 1; r++) for (let c = 1; c < W - 1; c++) {
-    let ok = !bits[r * W + c];
-    for (let dr = -1; ok && dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) if (bits[(r + dr) * W + c + dc]) { ok = false; break; }
-    nav[r * W + c] = ok ? 1 : 0;
-  }
+  for (let r = 1; r < H - 1; r++) for (let c = 1; c < W - 1; c++) { const i = r * W + c;
+    nav[i] = !bits[i] && !bits[i - 1] && !bits[i + 1] && !bits[i - W] && !bits[i + W] && !safe[i] ? 1 : 0; }
   const navCells = []; for (let i = 0; i < W * H; i++) if (nav[i]) navCells.push(i);
   function nearestNav(i) {
     if (nav[i]) return i; const r0 = (i / W) | 0, c0 = i % W;
@@ -920,6 +938,9 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     return out;
   }
   const idxOf = (x, z) => Math.max(0, Math.min(H - 1, Math.floor(z * K))) * W + Math.max(0, Math.min(W - 1, Math.floor(x * K)));
+  // keep only the part of the maze connected to the exit: pockets that can be reached only through the start zone stay dinosaur-free
+  { const reach = field(idxOf(EX, EZ), new Int32Array(W * H)); for (let i = 0; i < W * H; i++) if (nav[i] && reach[i] < 0) nav[i] = 0;
+    navCells.length = 0; for (let i = 0; i < W * H; i++) if (nav[i]) navCells.push(i); }
   const cellX = i => (i % W + .5) / K, cellZ = i => ((i / W | 0) + .5) / K;
   function lineOfSight(x1, z1, x2, z2) {
     const n = Math.ceil(Math.hypot(x2 - x1, z2 - z1) * K * 2);
@@ -1085,7 +1106,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     bx(.06, .06, .06, skin, 0, .27, 0, human); bx(.064, .02, .064, hair, 0, .305, 0, human);
     human.userData.arms = [aL, aR]; }
 
-  const dinos = []; let dinoSeq = 0;
+  const dinos = [], MAX_DINOS = 10; let dinoSeq = 0;
   function addDino(id, x, z, a) {
     const d = Object.assign(makeDinoModel(), { id, x, z, a: a === undefined ? rnd() * 6.28 : a, y: 0, mode: "calm", prevMode: "calm", lost: 0, lastX: 0, lastZ: 0, dist: new Int32Array(W * H), target: -1, refresh: 0, stuck: 0, lastProg: 0,
       recent: [], hearT: 0, phase: 0, spd: 0, anger: 0, alertT: 0, calmSpd: .3 * PLAYER_SPEED, calmT: 0, gruntT: rr(1, 6), tid: null, dead: 0, busy: 0, net: null });
@@ -1093,22 +1114,29 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
   }
   function removeDino(d) { if (d.gv) stopGrowl(d); scene.remove(d.g); const i = dinos.indexOf(d); if (i >= 0) dinos.splice(i, 1); }
 
+  const START_SHY = 3.5;   // dinosaurs do not pick spots this close to the start
   function pickWander(d, nearX, nearZ) {
-    for (let tries = 0; tries < 60; tries++) {
-      let i;
-      if (nearX !== undefined) i = nearestNav(idxOf(nearX + rr(-1, 1), nearZ + rr(-1, 1)));
-      else i = navCells[Math.floor(rnd() * navCells.length)];
-      const tx = cellX(i), tz = cellZ(i);
-      if (nearX === undefined) {
-        if (Math.hypot(tx - d.x, tz - d.z) < 4) continue;
+    let chosen = -1;
+    if (nearX !== undefined) { const i = nearestNav(idxOf(nearX + rr(-1, 1), nearZ + rr(-1, 1))); if (Math.hypot(cellX(i) - SX, cellZ(i) - SZ) > 2) chosen = i; }
+    if (chosen < 0) {
+      // of several random spots take the one farthest from the other dinosaurs and from where they are heading
+      let bestScore = -1;
+      for (let tries = 0, got = 0; tries < 80 && got < 8; tries++) {
+        const i = navCells[Math.floor(rnd() * navCells.length)], tx = cellX(i), tz = cellZ(i);
+        if (Math.hypot(tx - d.x, tz - d.z) < 4 || Math.hypot(tx - SX, tz - SZ) < START_SHY) continue;
         if (d.recent.some(p => Math.hypot(tx - p[0], tz - p[1]) < 3)) continue;
+        got++; let score = 40;
+        for (const o of dinos) { if (o === d || o.dead) continue; score = Math.min(score, Math.hypot(tx - o.x, tz - o.z)); if (o.target >= 0) score = Math.min(score, Math.hypot(tx - cellX(o.target), tz - cellZ(o.target))); }
+        score += rnd() * 2;
+        if (score > bestScore) { bestScore = score; chosen = i; }
       }
-      field(i, d.dist);
-      if (d.dist[nearestNav(idxOf(d.x, d.z))] < 0) { nearX = undefined; continue; }
-      d.target = i; d.stuck = 0; d.lastProg = d.dist[nearestNav(idxOf(d.x, d.z))];
-      if (nearX === undefined) { d.recent.push([tx, tz]); if (d.recent.length > 6) d.recent.shift(); }
-      return;
+      if (chosen < 0) chosen = navCells[Math.floor(rnd() * navCells.length)];
+      d.recent.push([cellX(chosen), cellZ(chosen)]); if (d.recent.length > 6) d.recent.shift();
     }
+    field(chosen, d.dist);
+    const here = d.dist[nearestNav(idxOf(d.x, d.z))];
+    if (here < 0) { field(navCells[Math.floor(rnd() * navCells.length)], d.dist); }
+    d.target = chosen; d.stuck = 0; d.lastProg = d.dist[nearestNav(idxOf(d.x, d.z))];
   }
   // a fresh world: one dinosaur at the exit, the rest far from the start and from each other
   function spawnAll(count = 3) {
@@ -1282,7 +1310,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
   function dinoAI(d, dt, P) {
     if (d.dead) { d.spd = 0; return; }
     if (d.busy > 0) { d.busy -= dt; d.spd = 0; if (d.busy <= 0) { d.mode = "calm"; d.tid = null; d.alertT = 0; pickWander(d); } return; }
-    const sees = p => { const dx = p.x - d.x, dz = p.z - d.z; if (Math.hypot(dx, dz) >= DINO.view) return false;
+    const sees = p => { if (p.safe) return false; const dx = p.x - d.x, dz = p.z - d.z; if (Math.hypot(dx, dz) >= DINO.view) return false;
       let ang = Math.atan2(dz, dx) - d.a; ang = Math.atan2(Math.sin(ang), Math.cos(ang)); return Math.abs(ang) <= DINO.fov && lineOfSight(d.x, d.z, p.x, p.z); };
     const near = (a, b) => Math.hypot(a.x - d.x, a.z - d.z) - Math.hypot(b.x - d.x, b.z - d.z);
     let tp = d.tid != null ? P.find(p => p.id === d.tid) || null : null;
@@ -1301,7 +1329,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     } else if (d.mode === "calm") {
       // footsteps pull it toward the sound, without making it angry
       d.hearT -= dt;
-      if (d.hearT <= 0) { const h = P.filter(p => p.moving && p.ground && Math.hypot(p.x - d.x, p.z - d.z) < DINO.hear).sort(near)[0]; if (h) { pickWander(d, h.x, h.z); d.hearT = 1.2; } }
+      if (d.hearT <= 0) { const h = P.filter(p => !p.safe && p.moving && p.ground && Math.hypot(p.x - d.x, p.z - d.z) < DINO.hear).sort(near)[0]; if (h) { pickWander(d, h.x, h.z); d.hearT = 1.2; } }
     }
     const here = nearestNav(idxOf(d.x, d.z));
     let cur = here, step = here;
@@ -1363,7 +1391,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     d.anger += (angerTarget - d.anger) * Math.min(1, dt * (angerTarget > d.anger ? 8 : 1.2));
     poseDino(d, d.mode === "chase" ? Math.sin(performance.now() * .02) * .05 : Math.sin(d.phase * .5) * .05);
     if (d.dead) { d.dead += dt; d.g.rotation.x = Math.min(1.45, d.dead * 2.4); d.g.position.y -= Math.max(0, d.dead - 1.3) * .3; d.jaw.rotation.z = -.5; return; }
-    if (st.running && !st.won && !cut && Math.hypot(st.x - d.x, st.z - d.z) < DINO.catchR && st.y < .22) startCatch(d);
+    if (st.running && !st.won && !cut && !safeAt(st.x, st.z) && Math.hypot(st.x - d.x, st.z - d.z) < DINO.catchR && st.y < .22) startCatch(d);
   }
   let localMoving = false;
   function worldUpdate(dt) {
@@ -1535,8 +1563,8 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
   }
   function activePlayers() {
     const L = [];
-    if (st.running && !st.won && !cut) L.push({ id: NET.on ? NET.me : "me", x: st.x, z: st.z, moving: localMoving, ground: st.ground });
-    if (NET.on) for (const p of Object.values(NET.players)) if (p.s === 1) L.push({ id: p.key, x: p.x, z: p.z, moving: performance.now() < p.movingUntil, ground: p.y < .03 });
+    if (st.running && !st.won && !cut) L.push({ id: NET.on ? NET.me : "me", x: st.x, z: st.z, moving: localMoving, ground: st.ground, safe: safeAt(st.x, st.z) });
+    if (NET.on) for (const p of Object.values(NET.players)) if (p.s === 1) L.push({ id: p.key, x: p.x, z: p.z, moving: performance.now() < p.movingUntil, ground: p.y < .03, safe: safeAt(p.x, p.z) });
     return L;
   }
   const onlineEl = document.getElementById("online"), onlineWrap = document.getElementById("onlineWrap");
@@ -1570,7 +1598,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     NET.ensureT = 1.2;
   }
   function hostEnsure() {
-    const want = Object.keys(NET.players).length + 3, alive = dinos.filter(d => !d.dead), free = alive.filter(d => d.busy <= 0 && !(cut && cut.d === d));
+    const want = Math.min(MAX_DINOS, Object.keys(NET.players).length + 3), alive = dinos.filter(d => !d.dead), free = alive.filter(d => d.busy <= 0 && !(cut && cut.d === d));
     if (!dinos.length) { spawnAll(want); return; }
     if (alive.length < want) pickWander(addDino("d" + (dinoSeq++), cellX(nearestNav(idxOf(EX, EZ))), cellZ(nearestNav(idxOf(EX, EZ)))));   // a newcomer appears at the exit
     else if (alive.length > want && free.length) { const d = free[Math.floor(Math.random() * free.length)]; d.dead = .001; d.mode = "calm"; d.tid = null; }   // someone left: one dies
@@ -1647,6 +1675,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
       const i = (r * W + c) * 4, seen = st.rev[((r / REV) | 0) * RW + ((c / REV) | 0)];
       if (!seen) { d[i] = 196; d[i + 1] = 214; d[i + 2] = 70; }
       else if (bits[r * W + c]) { d[i] = 40; d[i + 1] = 42; d[i + 2] = 34; }
+      else if (safe[r * W + c]) { d[i] = 120; d[i + 1] = 215; d[i + 2] = 255; }
       else { const m = MINI_COL[biome[r * W + c] * 4 + sub[r * W + c]]; d[i] = m[0]; d[i + 1] = m[1]; d[i + 2] = m[2]; }
       d[i + 3] = 255;
     }
