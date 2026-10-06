@@ -1135,7 +1135,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
   const dinos = [], MAX_DINOS = 11; let dinoSeq = 0;
   function addDino(id, x, z, a) {
     const d = Object.assign(makeDinoModel(), { id, x, z, a: a === undefined ? rnd() * 6.28 : a, y: 0, mode: "calm", prevMode: "calm", lost: 0, lastX: 0, lastZ: 0, dist: new Int32Array(W * H), target: -1, refresh: 0, stuck: 0, lastProg: 0,
-      recent: [], hearT: 0, phase: 0, spd: 0, anger: 0, alertT: 0, calmSpd: .3 * PLAYER_SPEED, calmT: 0, gruntT: rr(1, 6), tid: null, dead: 0, busy: 0, net: null, irk: 0, irkId: null, rageT: 0, glare: false, baited: false });
+      recent: [], hearT: 0, phase: 0, spd: 0, anger: 0, alertT: 0, calmSpd: .3 * PLAYER_SPEED, calmT: 0, gruntT: rr(1, 6), tid: null, dead: 0, busy: 0, net: null, irk: 0, irkId: null, rageT: 0, glare: false, wantOut: 0 });
     dinos.push(d); return d;
   }
   function removeDino(d) { if (d.gv) stopGrowl(d); scene.remove(d.g); const i = dinos.indexOf(d); if (i >= 0) dinos.splice(i, 1); }
@@ -1370,17 +1370,22 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
       let ang = Math.atan2(dz, dx) - d.a; ang = Math.atan2(Math.sin(ang), Math.cos(ang)); return (Math.abs(ang) <= DINO.fov * 1.3 || dist < 3) && lineOfSight(d.x, d.z, p.x, p.z); };
     let teaser = null; d.glare = false;
     if (d.mode !== "rage") {
-      teaser = P.filter(p => p.safe && (p.moving || p.id === d.tid) && plain(p)).sort(near)[0] || null;
-      // Baiting counts too: stepping out to get its attention and ducking back into the zone costs it a chunk of patience each time,
-      // more if it had already started the chase. It holds the grudge for a while, so repeated baiting adds up.
+      // It hates hanging about the start zone. Having lost someone into it, it gives up at once and tries to walk away (d.wantOut).
+      // Patience is spent only by players who keep it from leaving: stepping out again to draw it back and ducking in (baiting),
+      // or fidgeting in the zone in front of it (teasing). A plain escape into the zone costs nothing.
       const hunted = d.tid != null && d.mode !== "calm" ? P.find(p => p.id === d.tid) : null;
-      if (hunted && hunted.safe) { if (!d.baited) { d.baited = true; d.irk += d.mode === "chase" ? 3.5 : 1.5 + Math.min(2, d.alertT); d.irkId = hunted.id; } }
-      else d.baited = false;
+      if (hunted && hunted.safe) {
+        if (d.wantOut > 0) { d.irk += d.mode === "chase" ? 3 : 1.5 + Math.min(1.5, d.alertT); d.irkId = hunted.id; }
+        d.wantOut = 12; d.mode = "calm"; d.tid = null; d.alertT = 0; d.lost = 0; pickWander(d);
+      }
+      if (d.mode === "calm") teaser = P.filter(p => p.safe && p.moving && plain(p)).sort(near)[0] || null;
+      if (teaser) { d.irk += dt; d.irkId = teaser.id; if (d.irk > 2) d.wantOut = Math.max(d.wantOut, 6); }
+      if (d.wantOut > 0) { d.wantOut -= dt; if (Math.hypot(d.x - SX, d.z - SZ) > 7) d.wantOut = 0; }
+      else if (!teaser) { d.irk = Math.max(0, d.irk - dt * .5); if (!d.irk) d.irkId = null; }
       const grudge = d.irkId != null ? P.find(p => p.id === d.irkId) : null;
-      if (teaser) { d.irk += dt; d.irkId = teaser.id; } else { d.irk = Math.max(0, d.irk - dt * (grudge ? .15 : .5)); if (!d.irk) d.irkId = null; }
       // out of patience: it charges as soon as that player is hiding in the zone in plain reach
       if (d.irk >= DINO.patience) { d.irk = DINO.patience;
-        if (grudge && grudge.safe && Math.hypot(grudge.x - d.x, grudge.z - d.z) < DINO.teaseRange && lineOfSight(d.x, d.z, grudge.x, grudge.z)) { d.mode = "rage"; d.tid = d.irkId; d.irk = 0; d.rageT = 0; d.baited = false; } }
+        if (grudge && grudge.safe && Math.hypot(grudge.x - d.x, grudge.z - d.z) < DINO.teaseRange && lineOfSight(d.x, d.z, grudge.x, grudge.z)) { d.mode = "rage"; d.tid = d.irkId; d.irk = 0; d.rageT = 0; d.wantOut = 0; } }
     }
     if (d.mode === "rage") {
       const v = P.find(p => p.id === d.tid); d.rageT += dt;
@@ -1429,9 +1434,8 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     else if (d.mode === "chase") { tx = d.lastX; tz = d.lastZ; }
     else { d.stuck += 1; tx = d.x + Math.cos(d.a); tz = d.z + Math.sin(d.a); }
     // glaring at a teaser: it stops and stares while its patience drains
-    const stare = teaser || (d.irk > .5 && d.irkId != null ? P.find(p => p.id === d.irkId && p.safe) : null);
-    d.glare = !!stare && d.mode === "calm" && d.irk > .5;
-    if (d.glare) { tx = stare.x; tz = stare.z; }
+    d.glare = !!teaser && d.mode === "calm";
+    if (d.glare) { tx = teaser.x; tz = teaser.z; }
     // standing where it should not walk (inside the start zone after a meal, or pressed against a wall): head straight back out
     const cellI = idxOf(d.x, d.z), off = !nav[cellI];
     if (off) {
