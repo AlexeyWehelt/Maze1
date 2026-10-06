@@ -972,12 +972,15 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     return p1.map((_, k) => .5 * (2 * p1[k] + (-p0[k] + p2[k]) * u + (2 * p0[k] - 5 * p1[k] + 4 * p2[k] - p3[k]) * u * u + (-p0[k] + 3 * p1[k] - 3 * p2[k] + p3[k]) * u * u * u));
   }
   function sweepGeo(R, S) {
+    // two extra vertices at the very end close both ends of the tube, so nothing is hollow from any angle
     const g = new THREE.BufferGeometry(), N = R * (S + 1);
-    g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(N * 3), 3));
-    g.setAttribute("color", new THREE.BufferAttribute(new Float32Array(N * 3), 3));
-    const uv = new Float32Array(N * 2); for (let r = 0; r < R; r++) for (let s = 0; s <= S; s++) { uv[(r * (S + 1) + s) * 2] = r / (R - 1) * 6; uv[(r * (S + 1) + s) * 2 + 1] = s / S * 2; }
+    g.setAttribute("position", new THREE.BufferAttribute(new Float32Array((N + 2) * 3), 3));
+    g.setAttribute("color", new THREE.BufferAttribute(new Float32Array((N + 2) * 3), 3));
+    const uv = new Float32Array((N + 2) * 2); for (let r = 0; r < R; r++) for (let s = 0; s <= S; s++) { uv[(r * (S + 1) + s) * 2] = r / (R - 1) * 6; uv[(r * (S + 1) + s) * 2 + 1] = s / S * 2; }
     g.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
     const idx = []; for (let r = 0; r < R - 1; r++) for (let s = 0; s < S; s++) { const a = r * (S + 1) + s, b = a + S + 1; idx.push(a, b, a + 1, b, b + 1, a + 1); }
+    const last = (R - 1) * (S + 1);
+    for (let s = 0; s < S; s++) { idx.push(N, s, s + 1); idx.push(N + 1, last + s + 1, last + s); }
     g.setIndex(idx); g.userData = { R, S }; return g;
   }
   // frames: [{x,y,z,w,h,lo}] — writes ring vertices around the curve
@@ -995,11 +998,17 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
         P[i] = f.x + sx * c * f.w + nx * sn * hh; P[i + 1] = f.y + ny * sn * hh; P[i + 2] = f.z + sz * c * f.w + nz * sn * hh;
       }
     }
+    const N3 = R * (S + 1) * 3, f0 = F[0], f1 = F[R - 1];
+    // cap centres bulge out a little so the ends are rounded rather than flat
+    P[N3] = f0.x - f0.tx * f0.w * .5; P[N3 + 1] = f0.y - f0.ty * f0.w * .5; P[N3 + 2] = f0.z - f0.tz * f0.w * .5;
+    P[N3 + 3] = f1.x + f1.tx * f1.w * .5; P[N3 + 4] = f1.y + f1.ty * f1.w * .5; P[N3 + 5] = f1.z + f1.tz * f1.w * .5;
     g.attributes.position.needsUpdate = true; g.computeVertexNormals();
   }
   function profileFrames(PROF, R, fn) { const F = []; for (let r = 0; r < R; r++) { const u = r / (R - 1), c = catmull(PROF, u); const f = { u, x: c[0], y: c[1], z: 0, w: c[2], h: c[3], lo: c[4] }; if (fn) fn(f); F.push(f); } return F; }
   function paintSweep(g, fn) { const { R, S } = g.userData, C = g.attributes.color.array, col = new THREE.Color();
-    for (let r = 0; r < R; r++) for (let s = 0; s <= S; s++) { fn(col, r / (R - 1), Math.sin(s / S * Math.PI * 2), Math.cos(s / S * Math.PI * 2)); const i = (r * (S + 1) + s) * 3; C[i] = col.r; C[i + 1] = col.g; C[i + 2] = col.b; } }
+    for (let r = 0; r < R; r++) for (let s = 0; s <= S; s++) { fn(col, r / (R - 1), Math.sin(s / S * Math.PI * 2), Math.cos(s / S * Math.PI * 2)); const i = (r * (S + 1) + s) * 3; C[i] = col.r; C[i + 1] = col.g; C[i + 2] = col.b; }
+    const N3 = R * (S + 1) * 3, q = Math.round(S / 4) * 3, l = (R - 1) * (S + 1) * 3 + q;   // caps take the colour of the top of their ring
+    for (let k = 0; k < 3; k++) { C[N3 + k] = C[q + k]; C[N3 + 3 + k] = C[l + k]; } }
   function staticTube(PROF, R, S, paint) { const g = sweepGeo(R, S); fillSweep(g, profileFrames(PROF, R)); paintSweep(g, paint); return g; }
   // scaly bump texture
   const scaleTex = canvasTex(256, (g, s) => {
@@ -1016,18 +1025,20 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
   function skinPaint(stripes) { return (col, u, sn) => {
     mixc(col, SKIN.base, SKIN.belly, (-.15 - sn) * 2.4);
     if (stripes && sn > .15 && u > .12 && u < .86 && ((u * 11) % 1) < .38) col.lerp(SKIN.dark, Math.min(1, (sn - .15) * 2.5) * .85);
+    if (stripes && sn > .8) col.lerp(SKIN.dark, (sn - .8) * 4.2);
     if (sn > -.1 && Math.random() < .08) col.lerp(SKIN.spot, .5);
     col.offsetHSL(0, 0, (Math.random() - .5) * .04); }; }
   const skinMat = () => new THREE.MeshStandardMaterial({ vertexColors: true, bumpMap: scaleTex, bumpScale: .007, roughness: .7, metalness: 0 });
   const M_SKIN = skinMat(), M_GUMS = new THREE.MeshStandardMaterial({ color: 0x6a1e2a, roughness: .5 }), M_TONGUE2 = new THREE.MeshStandardMaterial({ color: 0xb8405a, roughness: .4 });
   const M_TOOTH2 = new THREE.MeshStandardMaterial({ color: 0xf6eed6, roughness: .35 }), M_CLAW2 = new THREE.MeshStandardMaterial({ color: 0x24201c, roughness: .4 });
+  const M_SCUTE = new THREE.MeshStandardMaterial({ color: 0x123f36, roughness: .6 });
   const M_PLATE2 = new THREE.MeshStandardMaterial({ color: 0xf08a2a, roughness: .55, emissive: 0x2a0e00 });
   const BODY = [
     [-.6, .2, .006, .008, 1], [-.5, .22, .026, .03, 1], [-.38, .25, .048, .054, 1.05], [-.26, .28, .074, .082, 1.1],
     [-.14, .31, .096, .108, 1.15], [-.04, .34, .108, .122, 1.25], [.05, .385, .102, .116, 1.25], [.11, .445, .086, .096, 1.15],
-    [.15, .505, .072, .076, 1.05], [.175, .56, .064, .064, 1]];
-  const HEAD = [[-.035, 0, .046, .054, .7], [0, .012, .062, .07, .65], [.05, .012, .062, .066, .6], [.1, .006, .056, .058, .55], [.15, 0, .05, .05, .5], [.185, -.004, .042, .04, .5], [.2, -.006, .012, .014, .5]];
-  const JAW = [[-.02, -.014, .04, .02, 1], [.04, -.02, .052, .026, 1.1], [.1, -.02, .049, .024, 1.1], [.15, -.018, .042, .02, 1.1], [.185, -.015, .032, .014, 1], [.198, -.014, .008, .006, 1]];
+    [.15, .505, .072, .076, 1.05], [.175, .56, .064, .064, 1], [.19, .59, .05, .05, 1]];
+  const HEAD = [[-.075, .0, .012, .014, .9], [-.062, .003, .036, .04, .85], [-.035, .006, .052, .058, .75], [0, .012, .062, .07, .65], [.05, .012, .062, .066, .6], [.1, .006, .056, .058, .55], [.15, 0, .05, .05, .5], [.185, -.004, .042, .04, .5], [.2, -.006, .012, .014, .5]];
+  const JAW = [[-.045, -.012, .01, .008, 1], [-.02, -.014, .04, .02, 1], [.04, -.02, .052, .026, 1.1], [.1, -.02, .049, .024, 1.1], [.15, -.018, .042, .02, 1.1], [.185, -.015, .032, .014, 1], [.198, -.014, .008, .006, 1]];
   const BR = 46, BS = 20;
   const sample = (PROF, x) => { let best = null, bd = 1e9; for (let i = 0; i <= 60; i++) { const c = catmull(PROF, i / 60), dd = Math.abs(c[0] - x); if (dd < bd) { bd = dd; best = c; } } return best; };
   function makeDinoModel() {
@@ -1036,14 +1047,17 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     g.add(new THREE.Mesh(bodyGeo, M_SKIN));
     // plates and tail spikes ride on the bending spine
     const plates = [];
+    const knobGeo = new THREE.SphereGeometry(1, 8, 6);
     const plateShape = new THREE.Shape(); plateShape.moveTo(-.5, 0); plateShape.quadraticCurveTo(-.45, .7, 0, 1); plateShape.quadraticCurveTo(.45, .7, .5, 0); plateShape.lineTo(-.5, 0);
     const plateGeo = new THREE.ExtrudeGeometry(plateShape, { depth: .12, bevelEnabled: true, bevelThickness: .05, bevelSize: .05, bevelSegments: 1 }); plateGeo.translate(0, 0, -.06);
-    for (let i = 0; i < 0; i++) { const u = .16 + i * .062, big = Math.sin(Math.min(1, (u - .1) / .72) * Math.PI);
-      const m = new THREE.Mesh(plateGeo, M_PLATE2); const sz = .025 + big * .05; m.scale.set(sz * .9, sz, .05); g.add(m); plates.push({ m, r: Math.round(u * (BR - 1)) }); }
+    for (let i = 0; i < 26; i++) { const u = .06 + i * .034, big = Math.sin(Math.min(1, (u - .02) / .92) * Math.PI);
+      const m = new THREE.Mesh(plateGeo, M_SCUTE); const sz = .012 + big * .02; m.scale.set(sz * 1.15, sz * 1.35, .1); g.add(m); plates.push({ m, r: Math.round(u * (BR - 1)), side: 0, lift: .9 }); }
+    for (let i = 0; i < 14; i++) for (const side of [1, -1]) { const u = .3 + i * .04;
+      const m = new THREE.Mesh(knobGeo, M_SCUTE); const sz = .011 + Math.sin((u - .3) / .56 * Math.PI) * .008; m.scale.set(sz * 1.3, sz * .7, sz); g.add(m); plates.push({ m, r: Math.round(u * (BR - 1)), side: side * .52, lift: .86 }); }
     // head
     const head = new THREE.Group(); head.scale.setScalar(1.45); g.add(head);
     const M_HEAD = skinMat(), M_HEAD2 = new THREE.MeshStandardMaterial({ color: SKIN.base.clone(), bumpMap: scaleTex, bumpScale: .007, roughness: .7 });
-    const headGeo = staticTube(HEAD, 26, 18, (col, u, sn) => { mixc(col, SKIN.base, SKIN.belly, (-.3 - sn) * 2.5); if (sn > .3 && Math.random() < .12) col.lerp(SKIN.spot, .5); col.offsetHSL(0, 0, (Math.random() - .5) * .04); });
+    const headGeo = staticTube(HEAD, 32, 18, (col, u, sn) => { mixc(col, SKIN.base, SKIN.belly, (-.3 - sn) * 2.5 * Math.min(1, Math.max(0, (u - .3) * 5))); if (sn > .75) col.lerp(SKIN.dark, (sn - .75) * 2.4); if (sn > .3 && Math.random() < .12) col.lerp(SKIN.spot, .5); col.offsetHSL(0, 0, (Math.random() - .5) * .04); });
     head.add(new THREE.Mesh(headGeo, M_HEAD));
     const mouth = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 8), M_GUMS); mouth.scale.set(.095, .02, .045); mouth.position.set(.095, -.026, 0); head.add(mouth);
     const toothGeo = new THREE.ConeGeometry(.0055, .024, 5);
@@ -1060,6 +1074,8 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
       const horn = new THREE.Mesh(new THREE.ConeGeometry(.008, .03, 6), M_CLAW2); horn.position.set(.005, .07, sz * .03); horn.rotation.z = .8;
       const nos = new THREE.Mesh(new THREE.SphereGeometry(.005, 6, 5), M_PUPIL); nos.position.set(.192, .014, sz * .018); head.add(nos);
     }
+    for (const sz of [1, -1]) { const b = new THREE.Mesh(new THREE.SphereGeometry(1, 10, 8), M_HEAD2); b.scale.set(.03, .016, .022); b.position.set(-.025, .058, sz * .028); head.add(b); }
+    for (let i = 0; i < 4; i++) { const sc = new THREE.Mesh(plateGeo, M_SCUTE); const z = .016 - i * .002; sc.scale.set(z * 1.4, z, .09); sc.position.set(.02 - i * .024, .078 - i * .006 - (i === 3 ? .008 : 0), 0); head.add(sc); }
     // lower jaw on a hinge, with teeth and tongue
     const jaw = new THREE.Group(); jaw.position.set(-.012, -.028, 0); head.add(jaw);
     jaw.add(new THREE.Mesh(staticTube(JAW, 20, 14, (col, u, sn) => { mixc(col, SKIN.base, SKIN.belly, (.2 - sn) * 2); col.offsetHSL(0, 0, (Math.random() - .5) * .04); }), M_HEAD));
@@ -1097,13 +1113,14 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     for (let r = 0; r < BR; r++) { const u = r / (BR - 1), c = catmull(BODY, u), f = F[r];
       f.x = c[0]; f.y = c[1]; f.z = 0; f.w = c[2]; f.h = c[3]; f.lo = c[4];
       if (u < .55) { const k = (.55 - u) / .55; f.z += Math.sin(sway - u * 7) * .06 * k * k; f.y += Math.sin(sway * .5 + u * 5) * .012 * k; }
-      if (u > .76) { const k = (u - .76) / .24; f.z += yaw * .09 * k * k; }
+      if (u > .74) { const k = (u - .74) / .26; f.z += yaw * .09 * k * k; }
       if (u > .3 && u < .8) { const b = Math.sin((u - .3) / .5 * Math.PI); f.w *= 1 + (breath - 1) * b; f.h *= 1 + (breath - 1) * b * 1.3; }
     }
     fillSweep(d.bodyGeo, F);
-    for (const p of d.plates) { const f = F[p.r]; p.m.position.set(f.x + f.nx * f.h * .82, f.y + f.ny * f.h * .82, f.z + f.nz * f.h * .82);
+    for (const p of d.plates) { const f = F[p.r], cs = Math.cos(p.side * 1.5708), sn = Math.sin(p.side * 1.5708), sl = Math.hypot(f.tz, f.tx) || 1, sx = -f.tz / sl, sz = f.tx / sl;
+      p.m.position.set(f.x + (f.nx * cs * f.h + sx * sn * f.w) * p.lift, f.y + f.ny * cs * f.h * p.lift, f.z + (f.nz * cs * f.h + sz * sn * f.w) * p.lift);
       p.m.rotation.set(0, -Math.atan2(f.tz, f.tx), Math.atan2(f.ty, Math.hypot(f.tx, f.tz))); }
-    const top = F[BR - 1]; d.head.position.set(top.x, top.y + .012, top.z);
+    const top = F[BR - 4]; d.head.position.set(top.x + .012, top.y + .018, top.z);
   }
   // the little person who gets eaten in the catch scene
   const human = new THREE.Group(); human.visible = false; scene.add(human);
