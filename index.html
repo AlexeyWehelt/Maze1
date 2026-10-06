@@ -130,7 +130,7 @@ button { font: inherit; cursor: pointer; }
   <div class="overlay" id="intro">
     <div class="card">
       <h1>Лабиринт со стикера</h1>
-      <p>Найдите выход — синюю букву E. По лабиринту бродят динозавры: они видят перед собой и слышат шаги, а вы слышите их, так что включите звук. Заметив вас, динозавр замирает и наливается багровым, а через пару секунд бросается в погоню. Поймает — начнёте сначала. У старта, под буквой S, голубая безопасная зона: туда динозавры не заходят и вас там не видят. Мир общий: с каждым новым игроком у выхода появляется ещё один динозавр.</p>
+      <p>Найдите выход — синюю букву E. По лабиринту бродят динозавры: они видят перед собой и слышат шаги, а вы слышите их, так что включите звук. Заметив вас, динозавр замирает и наливается багровым, а через пару секунд бросается в погоню. Поймает — начнёте сначала. У старта, под буквой S, голубая безопасная зона: туда динозавры не заходят и вас там не видят. Но не дразните их оттуда: терпение у динозавра не бесконечное. Мир общий: с каждым новым игроком у выхода появляется ещё один динозавр.</p>
       <form id="login" class="login" novalidate>
         <div id="netFields" hidden>
           <label for="pname">Имя<input id="pname" name="pname" maxlength="16" autocomplete="username" autocapitalize="off" spellcheck="false"></label>
@@ -191,9 +191,10 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
   }
   const SX = (MAZE.start[0] + .5) / K, SZ = (MAZE.start[1] + .5) / K;
   const SAFE_CELLS = 12, safe = new Uint8Array(W * H);
-  { const dist = new Int16Array(W * H).fill(-1), q = [MAZE.start[1] * W + MAZE.start[0]]; dist[q[0]] = 0; safe[q[0]] = 1;
-    for (let h = 0; h < q.length; h++) { const i = q[h], c = i % W; if (dist[i] >= SAFE_CELLS) continue;
-      for (const n of [i - 1, i + 1, i - W, i + W]) { if (n < 0 || n >= W * H || Math.abs((n % W) - c) > 1 || bits[n] || dist[n] >= 0) continue; dist[n] = dist[i] + 1; safe[n] = 1; q.push(n); } } }
+  const safeDist = new Int16Array(W * H).fill(-1);
+  { const dist = safeDist, q = [MAZE.start[1] * W + MAZE.start[0]]; dist[q[0]] = 0; safe[q[0]] = 1;
+    for (let h = 0; h < q.length; h++) { const i = q[h], c = i % W; if (dist[i] >= SAFE_CELLS + 10) continue;
+      for (const n of [i - 1, i + 1, i - W, i + W]) { if (n < 0 || n >= W * H || Math.abs((n % W) - c) > 1 || bits[n] || dist[n] >= 0) continue; dist[n] = dist[i] + 1; if (dist[n] <= SAFE_CELLS) safe[n] = 1; q.push(n); } } }
   const safeAt = (x, z) => safe[Math.max(0, Math.min(H - 1, Math.floor(z * K))) * W + Math.max(0, Math.min(W - 1, Math.floor(x * K)))] === 1;
   const EX = (MAZE.exit[0] + .5) / K, EZ = (MAZE.exit[1] + .5) / K;
   const EYE = 0.42, RAD = 0.085;
@@ -914,7 +915,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
 
   // ---------- dinosaurs ----------
   const PLAYER_SPEED = 1.5;
-  const DINO = { chaseFast: 1.1 * PLAYER_SPEED, chaseSlow: .8 * PLAYER_SPEED, squeeze: .2 * PLAYER_SPEED, fov: Math.PI / 4, view: 7, hear: 4, forget: 5, catchR: .2, hearRange: 9 };
+  const DINO = { chaseFast: 1.1 * PLAYER_SPEED, chaseSlow: .8 * PLAYER_SPEED, squeeze: .2 * PLAYER_SPEED, patience: 8, teaseRange: 4.5, fov: Math.PI / 4, view: 7, hear: 4, forget: 5, catchR: .2, hearRange: 9 };
   // walkable cells for dinosaurs: free cells with no wall directly beside them (props don't stop them),
   // which keeps every part of the maze reachable through the narrowest gaps; the start zone is off limits
   const nav = new Uint8Array(W * H);
@@ -1134,7 +1135,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
   const dinos = [], MAX_DINOS = 11; let dinoSeq = 0;
   function addDino(id, x, z, a) {
     const d = Object.assign(makeDinoModel(), { id, x, z, a: a === undefined ? rnd() * 6.28 : a, y: 0, mode: "calm", prevMode: "calm", lost: 0, lastX: 0, lastZ: 0, dist: new Int32Array(W * H), target: -1, refresh: 0, stuck: 0, lastProg: 0,
-      recent: [], hearT: 0, phase: 0, spd: 0, anger: 0, alertT: 0, calmSpd: .3 * PLAYER_SPEED, calmT: 0, gruntT: rr(1, 6), tid: null, dead: 0, busy: 0, net: null });
+      recent: [], hearT: 0, phase: 0, spd: 0, anger: 0, alertT: 0, calmSpd: .3 * PLAYER_SPEED, calmT: 0, gruntT: rr(1, 6), tid: null, dead: 0, busy: 0, net: null, irk: 0, irkId: null, rageT: 0, glare: false });
     dinos.push(d); return d;
   }
   function removeDino(d) { if (d.gv) stopGrowl(d); scene.remove(d.g); const i = dinos.indexOf(d); if (i >= 0) dinos.splice(i, 1); }
@@ -1362,6 +1363,30 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     const sees = p => { if (p.safe) return false; const dx = p.x - d.x, dz = p.z - d.z; if (Math.hypot(dx, dz) >= DINO.view) return false;
       let ang = Math.atan2(dz, dx) - d.a; ang = Math.atan2(Math.sin(ang), Math.cos(ang)); return Math.abs(ang) <= DINO.fov && lineOfSight(d.x, d.z, p.x, p.z); };
     const near = (a, b) => Math.hypot(a.x - d.x, a.z - d.z) - Math.hypot(b.x - d.x, b.z - d.z);
+    // Teasing: a player it can plainly see inside the safe zone, who keeps moving about or has just escaped it there,
+    // wears its patience out. When patience runs out it charges into the zone after that player.
+    // (it notices them in front of it, or hears them fidgeting within 3 m, as long as no wall is in between)
+    const plain = p => { const dx = p.x - d.x, dz = p.z - d.z, dist = Math.hypot(dx, dz); if (dist >= DINO.teaseRange) return false;
+      let ang = Math.atan2(dz, dx) - d.a; ang = Math.atan2(Math.sin(ang), Math.cos(ang)); return (Math.abs(ang) <= DINO.fov * 1.3 || dist < 3) && lineOfSight(d.x, d.z, p.x, p.z); };
+    let teaser = null; d.glare = false;
+    if (d.mode !== "rage") {
+      teaser = P.filter(p => p.safe && (p.moving || p.id === d.tid) && plain(p)).sort(near)[0] || null;
+      if (teaser) { d.irk += dt; d.irkId = teaser.id; } else { d.irk = Math.max(0, d.irk - dt * .5); if (!d.irk) d.irkId = null; }
+      if (d.irk >= DINO.patience) { d.mode = "rage"; d.tid = d.irkId; d.irk = 0; d.rageT = 0; }
+    }
+    if (d.mode === "rage") {
+      const v = P.find(p => p.id === d.tid); d.rageT += dt;
+      if (!v || d.rageT > 12) { d.mode = "calm"; d.tid = null; pickWander(d); }
+      else if (!v.safe) { d.mode = "chase"; d.lost = 0; d.refresh = 0; d.lastX = v.x; d.lastZ = v.z; }   // the player ran out: an ordinary chase
+      else {
+        const want = Math.atan2(v.z - d.z, v.x - d.x), diff = Math.atan2(Math.sin(want - d.a), Math.cos(want - d.a));
+        d.a += Math.max(-6 * dt, Math.min(6 * dt, diff));
+        d.spd += ((Math.abs(diff) > 1 ? .4 : 1) * DINO.chaseFast - d.spd) * Math.min(1, dt * 6);
+        const sp = d.spd * dt, nx = d.x + Math.cos(d.a) * sp, nz = d.z + Math.sin(d.a) * sp, open = (x, z) => !bits[idxOf(x, z)];
+        if (open(nx, d.z)) d.x = nx; if (open(d.x, nz)) d.z = nz;
+        return;
+      }
+    }
     let tp = d.tid != null ? P.find(p => p.id === d.tid) || null : null;
     if (d.mode === "calm") { d.tid = null; tp = P.filter(p => p.moving && sees(p)).sort(near)[0] || null; if (tp) { d.mode = "alert"; d.alertT = 0; d.tid = tp.id; } }
     const inCone = !!tp && sees(tp), dPl = tp ? Math.hypot(tp.x - d.x, tp.z - d.z) : 1e9;
@@ -1395,6 +1420,18 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     else if (cur !== here) { tx = cellX(cur); tz = cellZ(cur); }
     else if (d.mode === "chase") { tx = d.lastX; tz = d.lastZ; }
     else { d.stuck += 1; tx = d.x + Math.cos(d.a); tz = d.z + Math.sin(d.a); }
+    // glaring at a teaser: it stops and stares while its patience drains
+    const stare = teaser || (d.irk > .5 && d.irkId != null ? P.find(p => p.id === d.irkId && p.safe) : null);
+    d.glare = !!stare && d.mode === "calm" && d.irk > .5;
+    if (d.glare) { tx = stare.x; tz = stare.z; }
+    // standing where it should not walk (inside the start zone after a meal, or pressed against a wall): head straight back out
+    const cellI = idxOf(d.x, d.z), off = !nav[cellI];
+    if (off) {
+      if (safe[cellI]) { let best = -1, bs = -1; const c0 = cellI % W;
+        for (const n of [cellI - 1, cellI + 1, cellI - W, cellI + W, cellI - W - 1, cellI - W + 1, cellI + W - 1, cellI + W + 1]) { if (n < 0 || n >= W * H || Math.abs((n % W) - c0) > 1 || bits[n]) continue; const sd = safeDist[n] < 0 ? 999 : safeDist[n]; if (sd > bs) { bs = sd; best = n; } }
+        if (best >= 0) { tx = cellX(best); tz = cellZ(best); } }
+      else { const n = nearestNav(cellI); tx = cellX(n); tz = cellZ(n); }
+    }
     const want = Math.atan2(tz - d.z, tx - d.x), diff = Math.atan2(Math.sin(want - d.a), Math.cos(want - d.a));
     const turnRate = d.mode === "calm" ? 3 : 5;
     d.a += Math.max(-turnRate * dt, Math.min(turnRate * dt, diff));
@@ -1404,13 +1441,14 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     if (d.mode === "calm" && !atHome(d)) d.calmSpd = .5 * PLAYER_SPEED;
     const isProp = (x, z) => { const h = collH[idxOf(x, z)]; return h > 0 && h < WALLH; };
     const onProp = isProp(d.x, d.z) || isProp(d.x + Math.cos(d.a) * .12, d.z + Math.sin(d.a) * .12);
-    let target = d.mode === "chase" ? ((Math.abs(diff) > .35 || onProp) ? DINO.chaseSlow : DINO.chaseFast) : d.mode === "alert" ? 0 : d.calmSpd;
+    let target = d.mode === "chase" ? ((Math.abs(diff) > .35 || onProp) ? DINO.chaseSlow : DINO.chaseFast) : d.mode === "alert" || d.glare ? 0 : d.calmSpd;
+    if (off && d.mode === "calm") target = .5 * PLAYER_SPEED;
     if (Math.abs(diff) > 1.4) target *= .3;
     if (d.mode === "chase" && onProp && d.spd > DINO.chaseSlow) d.spd = DINO.chaseSlow;
     if (squeeze[idxOf(d.x, d.z)]) { target = Math.min(target, DINO.squeeze); d.spd = Math.min(d.spd, DINO.squeeze); }   // squeezing through a tight gap
     d.spd += (target - d.spd) * Math.min(1, dt * 6);
     const sp = d.spd * dt, nx = d.x + Math.cos(d.a) * sp, nz = d.z + Math.sin(d.a) * sp;
-    const free = (x, z) => nav[idxOf(x, z)] === 1;
+    const free = off ? (x, z) => !bits[idxOf(x, z)] : (x, z) => nav[idxOf(x, z)] === 1;
     if (free(nx, d.z)) d.x = nx; if (free(d.x, nz)) d.z = nz;
     if (d.mode === "calm") {
       const dHere = d.dist[nearestNav(idxOf(d.x, d.z))];
@@ -1420,7 +1458,8 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     }
   }
   // on the other players' screens the dinosaur glides toward the state the host sent
-  const MODES = ["calm", "alert", "chase"];
+  const MODES = ["calm", "alert", "chase", "calm", "rage"];
+  const hunting = d => d.mode === "chase" || d.mode === "rage";
   function dinoFollow(d, dt) {
     const n = d.net; if (!n) return;
     const k = 1 - Math.exp(-dt * 10);
@@ -1432,18 +1471,19 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
   }
   // what every player sees and hears of a dinosaur: voice, steps, anger, pose, dying, and being caught by it
   function dinoFx(d, dt, moved) {
-    if (d.mode !== d.prevMode) { if (d.mode === "alert" && !d.dead) sScream(d); d.prevMode = d.mode; }
-    if (d.mode === "chase" && !d.dead) { startGrowl(d); updateGrowl(d); } else if (d.gv) stopGrowl(d);
+    if (d.mode !== d.prevMode) { if ((d.mode === "alert" || d.mode === "rage") && !d.dead) sScream(d); d.prevMode = d.mode; }
+    if (hunting(d) && !d.dead) { startGrowl(d); updateGrowl(d); } else if (d.gv) stopGrowl(d);
     if (d.mode === "calm" && !d.dead) { d.gruntT -= dt; if (d.gruntT <= 0) { sGrunt(d); d.gruntT = rr(3, 8); } }
     const ph = collH[idxOf(d.x, d.z)], gy = ph > 0 && ph < WALLH ? ph : 0;
     d.y += (gy - d.y) * Math.min(1, dt * 8);
     const prevPhase = d.phase; d.phase += moved * 22;
     if (Math.floor(prevPhase / Math.PI) !== Math.floor(d.phase / Math.PI)) sStep(d);
-    const angerTarget = d.dead ? 0 : d.mode === "chase" || d.busy > 0 ? 1 : d.mode === "alert" ? Math.min(1, d.alertT / 2) : 0;
+    const angerTarget = d.dead ? 0 : hunting(d) || d.busy > 0 ? 1 : Math.max(d.mode === "alert" ? Math.min(1, d.alertT / 2) : 0, Math.min(.95, d.irk / DINO.patience));
     d.anger += (angerTarget - d.anger) * Math.min(1, dt * (angerTarget > d.anger ? 8 : 1.2));
-    poseDino(d, d.mode === "chase" ? Math.sin(performance.now() * .02) * .05 : Math.sin(d.phase * .5) * .05);
+    poseDino(d, hunting(d) ? Math.sin(performance.now() * .02) * .05 : Math.sin(d.phase * .5) * .05);
     if (d.dead) { d.dead += dt; d.g.rotation.x = Math.min(1.45, d.dead * 2.4); d.g.position.y -= Math.max(0, d.dead - 1.3) * .3; d.jaw.rotation.z = -.5; return; }
-    if (st.running && !st.won && !cut && !safeAt(st.x, st.z) && Math.hypot(st.x - d.x, st.z - d.z) < DINO.catchR && st.y < .22) startCatch(d);
+    const mineId = NET.on ? NET.me : "me";   // the start zone protects you, unless this one has had enough of your teasing
+    if (st.running && !st.won && !cut && (!safeAt(st.x, st.z) || (d.mode === "rage" && d.tid === mineId)) && Math.hypot(st.x - d.x, st.z - d.z) < DINO.catchR * (d.mode === "rage" ? 1.4 : 1) && st.y < .22) startCatch(d);
   }
   let localMoving = false;
   function worldUpdate(dt) {
@@ -1459,11 +1499,12 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     }
     if (cut) return;
     const mine = NET.on ? NET.me : "me";
-    let danger = 0; for (const d of dinos) if (d.tid === mine && !d.dead) danger = Math.max(danger, d.mode === "chase" ? (d.lost > 0 ? .35 : .75) : d.anger * .4);
+    let danger = 0; for (const d of dinos) if (d.tid === mine && !d.dead) danger = Math.max(danger, hunting(d) ? (d.lost > 0 && d.mode === "chase" ? .35 : .75) : d.anger * .4);
+    for (const d of dinos) if (d.irkId === mine && !d.dead) danger = Math.max(danger, d.anger * .5);
     dangerEl.style.opacity = danger;
   }
   function poseDino(d, headWobble) {
-    const tt = performance.now() * .001, chase = d.mode === "chase";
+    const tt = performance.now() * .001, chase = hunting(d);
     const breath = 1 + Math.sin(tt * (chase ? 9 : 2.2)) * (chase ? .045 : .022);
     const yaw = d.mode === "calm" ? Math.sin(tt * .7 + d.x * 3) * .7 : 0;
     deformBody(d, d.phase * .5 + tt * .7, yaw, breath);
@@ -1696,7 +1737,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
       while (NET.relocate > 0) { NET.relocate--; relocateDino(); }
       NET.dinoT -= dt;
       if (NET.dinoT <= 0) { NET.dinoT = .16; const o = {};
-        for (const d of dinos) o[d.id] = [r2(d.x), r2(d.z), r2(d.a), d.dead ? 3 : MODES.indexOf(d.mode), r2(d.alertT), d.tid || 0, d.lost > 0 ? 1 : 0];
+        for (const d of dinos) o[d.id] = [r2(d.x), r2(d.z), r2(d.a), d.dead ? 3 : d.mode === "calm" && d.irk > .5 ? 1 : MODES.indexOf(d.mode), r2(Math.max(d.alertT, d.irk / DINO.patience * 1.9)), d.tid || (d.irk > .5 ? d.irkId : 0) || 0, d.lost > 0 ? 1 : 0];
         NET.backend.setDinos(o); }
     }
   }
@@ -1749,7 +1790,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     }
     mg.putImageData(mimg, 0, 0);
     if (st.rev[((MAZE.exit[1] / REV) | 0) * RW + ((MAZE.exit[0] / REV) | 0)]) { mg.fillStyle = "#1b6fd1"; mg.font = "bold 22px sans-serif"; mg.textAlign = "center"; mg.textBaseline = "middle"; mg.fillText("E", EX * K, EZ * K); }
-    for (const d of dinos) { mg.fillStyle = d.mode === "chase" ? "#ff2a1a" : d.mode === "alert" ? "#ff9a2a" : "#2f8f7a"; mg.beginPath(); mg.arc(d.x * K, d.z * K, 5, 0, 7); mg.fill(); }
+    for (const d of dinos) { mg.fillStyle = hunting(d) ? "#ff2a1a" : d.mode === "alert" ? "#ff9a2a" : "#2f8f7a"; mg.beginPath(); mg.arc(d.x * K, d.z * K, 5, 0, 7); mg.fill(); }
     if (NET.on) for (const p of Object.values(NET.players)) if (p.s === 1) { mg.fillStyle = "#1b6fd1"; mg.beginPath(); mg.arc(p.x * K, p.z * K, 4, 0, 7); mg.fill(); }
     mg.save(); mg.translate(st.x * K, st.z * K); mg.rotate(st.a);
     mg.fillStyle = "#d1321b"; mg.beginPath(); mg.moveTo(9, 0); mg.lineTo(-6, -6); mg.lineTo(-6, 6); mg.closePath(); mg.fill();
