@@ -936,6 +936,17 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
       const r = r0 + dr, c = c0 + dc; if (r >= 0 && c >= 0 && r < H && c < W && nav[r * W + c]) return r * W + c; }
     return i;
   }
+  // From a spot dinosaurs do not normally stand on (pressed against a wall, a pocket, inside a wall after a jump in position):
+  // the walkable cell that is nearest on foot, never through a wall, and the first cell on the way to it.
+  const wbPrev = new Map();
+  function wayBack(i) {
+    if (nav[i]) return { goal: i, step: i };
+    wbPrev.clear(); wbPrev.set(i, -1); const q = [i];
+    for (let h = 0; h < q.length && h < 4000; h++) { const c = q[h], col = c % W;
+      if (nav[c]) { let s = c; while (wbPrev.get(s) !== i) s = wbPrev.get(s); return { goal: c, step: s }; }
+      for (const n of [c - 1, c + 1, c - W, c + W]) { if (n < 0 || n >= W * H || Math.abs((n % W) - col) > 1 || bits[n] || wbPrev.has(n)) continue; wbPrev.set(n, c); q.push(n); } }
+    return null;
+  }
   const qbuf = new Int32Array(W * H);
   function field(target, out) {
     out.fill(-1); target = nearestNav(target); out[target] = 0; let h = 0, t = 0; qbuf[t++] = target;
@@ -1132,7 +1143,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     bx(.06, .06, .06, skin, 0, .27, 0, human); bx(.064, .02, .064, hair, 0, .305, 0, human);
     human.userData.arms = [aL, aR]; }
 
-  const dinos = [], MAX_DINOS = 11; let dinoSeq = 0;
+  const dinos = [], MAX_DINOS = 10; let dinoSeq = 0;
   function addDino(id, x, z, a) {
     const d = Object.assign(makeDinoModel(), { id, x, z, a: a === undefined ? rnd() * 6.28 : a, y: 0, mode: "calm", prevMode: "calm", lost: 0, lastX: 0, lastZ: 0, dist: new Int32Array(W * H), target: -1, refresh: 0, stuck: 0, lastProg: 0,
       recent: [], hearT: 0, phase: 0, spd: 0, anger: 0, alertT: 0, calmSpd: .3 * PLAYER_SPEED, calmT: 0, gruntT: rr(1, 6), tid: null, dead: 0, busy: 0, net: null, irk: 0, irkId: null, rageT: 0, glare: false, baited: false });
@@ -1189,7 +1200,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     d.target = chosen; d.stuck = 0; d.lastProg = d.dist[nearestNav(idxOf(d.x, d.z))];
   }
   // a fresh world: one dinosaur at the exit, the rest far from the start and from each other
-  function spawnAll(count = 4) {
+  function spawnAll(count = 3) {
     while (dinos.length) removeDino(dinos[0]);
     const fromStart = field(idxOf(SX, SZ), new Int32Array(W * H));
     for (let k = 0; k < count; k++) {
@@ -1440,8 +1451,11 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
       if (safe[cellI]) { let best = -1, bs = -1; const c0 = cellI % W;
         for (const n of [cellI - 1, cellI + 1, cellI - W, cellI + W, cellI - W - 1, cellI - W + 1, cellI + W - 1, cellI + W + 1]) { if (n < 0 || n >= W * H || Math.abs((n % W) - c0) > 1 || bits[n]) continue; const sd = safeDist[n] < 0 ? 999 : safeDist[n]; if (sd > bs) { bs = sd; best = n; } }
         if (best >= 0) { tx = cellX(best); tz = cellZ(best); } }
-      else { const n = nearestNav(cellI); tx = cellX(n); tz = cellZ(n); }
-    }
+      else { const w = wayBack(cellI); if (w) { tx = cellX(w.step); tz = cellZ(w.step); } }
+      // it should be back on its feet within a couple of seconds; if not (walled in, or inside a wall), put it on the nearest walkable cell
+      d.offT = (d.offT || 0) + dt;
+      if (bits[cellI] || d.offT > (safe[cellI] ? 6 : 2.5)) { const w = wayBack(cellI), n = w ? w.goal : nearestNav(cellI); if (nav[n]) { d.x = cellX(n); d.z = cellZ(n); d.spd = 0; d.offT = 0; if (d.mode === "calm") pickWander(d); return; } }
+    } else d.offT = 0;
     const want = Math.atan2(tz - d.z, tx - d.x), diff = Math.atan2(Math.sin(want - d.a), Math.cos(want - d.a));
     const turnRate = d.mode === "calm" ? 3 : 5;
     d.a += Math.max(-turnRate * dt, Math.min(turnRate * dt, diff));
@@ -1581,7 +1595,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
   // ---------- multiplayer ----------
   // One shared world. Every player sends their own position; the player who joined first hosts the dinosaurs
   // (if they leave, the next one takes over). There are always players + 2 dinosaurs.
-  const NET = { on: false, me: null, name: "", host: false, ready: false, players: {}, join: 0, backend: null, sendT: 0, beatT: 0, dinoT: 0, ensureT: 0, last: "" };
+  const NET = { on: false, me: null, name: "", host: false, ready: false, players: {}, join: 0, backend: null, sendT: 0, beatT: 0, dinoT: 0, ensureT: 0, last: "", stale: {}, hostKey: null, worldAt: 0, tick: 0 };
   const keyOf = name => name.trim().toLowerCase().replace(/[.#$\[\]\/\s]+/g, "_").slice(0, 16);
   async function hashCode(key, code) {
     const txt = key + ":" + code;
@@ -1678,18 +1692,29 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
       if (!p) p = NET.players[key] = { key, name: String(v.n || key).slice(0, 16), x: v.x, z: v.z, a: v.a, y: v.y || 0, tx: v.x, tz: v.z, ta: v.a, movingUntil: 0, walk: 0, av: makeAvatar(String(v.n || key).slice(0, 16)) };
       if (Math.hypot(v.x - p.tx, v.z - p.tz) > .01) p.movingUntil = now + 450;
       if (p.s === 3 && v.s === 1) NET.relocate = (NET.relocate || 0) + 1;
-      p.tx = v.x; p.tz = v.z; p.ta = v.a; p.y = v.y || 0; p.s = v.s; p.e = v.e || null; p.j = v.j || 0;
+      p.tx = v.x; p.tz = v.z; p.ta = v.a; p.y = v.y || 0; p.s = v.s; p.e = v.e || null; p.j = v.j || 0; p.bg = !!v.bg;
     }
     for (const key in NET.players) if (!(key in map)) { scene.remove(NET.players[key].av.g); delete NET.players[key]; }
     // the earliest joiner hosts the dinosaurs
-    let hostKey = NET.me, hostJ = NET.join;
-    for (const p of Object.values(NET.players)) if (p.j && (p.j < hostJ || (p.j === hostJ && p.key < hostKey))) { hostKey = p.key; hostJ = p.j; }
-    const was = NET.host; NET.host = hostKey === NET.me; NET.ready = true;
-    if (NET.host && !was) becomeHost();
+    NET.ready = true; elect();
     onlineEl.textContent = Object.keys(NET.players).length + 1;
   }
+  // The dinosaurs are run by the earliest joiner whose game is actually running: a player whose tab is in the background
+  // (hidden tab, locked phone) cannot simulate anything, and one whose world updates have stopped arriving is skipped too.
+  function elect() {
+    if (!NET.on || !NET.ready) return;
+    let hostKey = null, hostJ = Infinity;
+    if (!document.hidden) { hostKey = NET.me; hostJ = NET.join; }
+    for (const p of Object.values(NET.players)) if (p.j && !p.bg && !NET.stale[p.key] && (p.j < hostJ || (p.j === hostJ && (hostKey === null || p.key < hostKey)))) { hostKey = p.key; hostJ = p.j; }
+    const was = NET.host; NET.host = hostKey === NET.me; NET.hostKey = hostKey;
+    if (NET.host && !was) becomeHost();
+  }
+  document.addEventListener("visibilitychange", () => { if (!NET.on) return; sendMe(true); elect(); last = performance.now(); NET.worldAt = performance.now(); });
   function onDinos(obj) {
-    NET.gotWorld = true;
+    NET.gotWorld = true; NET.worldAt = performance.now();
+    // someone else is writing the world: if they are ahead of me in line, they are alive after all and I step down
+    const w = obj && typeof obj.h === "string" ? obj.h : null;
+    if (w && w !== NET.me && NET.stale[w]) { delete NET.stale[w]; elect(); }
     if (NET.host) return;
     for (const id in obj) { const v = obj[id]; if (!Array.isArray(v)) continue;
       let d = dinos.find(q => q.id === id); if (!d) d = addDino(id, v[0], v[1], v[2]);
@@ -1714,7 +1739,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     Object.assign(d, { x: cellX(i), z: cellZ(i), y: 0, a: rnd() * 6.28, spd: 0, tid: null, alertT: 0, recent: [] }); pickWander(d);
   }
   function hostEnsure() {
-    const want = Math.min(MAX_DINOS, Object.keys(NET.players).length + 1 + 3), alive = dinos.filter(d => !d.dead), free = alive.filter(d => d.busy <= 0 && !(cut && cut.d === d));
+    const want = Math.min(MAX_DINOS, Object.keys(NET.players).length + 1 + 2), alive = dinos.filter(d => !d.dead), free = alive.filter(d => d.busy <= 0 && !(cut && cut.d === d));
     if (!dinos.length) { spawnAll(want); return; }
     if (alive.length < want) pickWander(addDino("d" + (dinoSeq++), cellX(nearestNav(idxOf(EX, EZ))), cellZ(nearestNav(idxOf(EX, EZ)))));   // a newcomer appears at the exit
     else if (alive.length > want && free.length) { const d = free[Math.floor(Math.random() * free.length)]; d.dead = .001; d.mode = "calm"; d.tid = null; }   // someone left: one dies
@@ -1722,6 +1747,17 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     for (const p of Object.values(NET.players)) if (p.e) { const d = dinos.find(q => q.id === p.e); if (d && !d.dead) { d.busy = 1; d.mode = "chase"; d.tid = p.key; } }
   }
   const r2 = v => Math.round(v * 100) / 100;
+  // my own state, sent when it changes and as a heartbeat
+  function sendMe(force) {
+    const s = cut ? 2 : st.won ? 3 : st.running ? 1 : 0;
+    if (NET.lastS === 3 && s === 1) NET.relocate = (NET.relocate || 0) + 1;
+    NET.lastS = s;
+    const me = { n: NET.name, x: r2(st.x), z: r2(st.z), a: r2(st.a), y: r2(st.y), s, e: cut ? cut.d.id : null, j: NET.join };
+    if (document.hidden) me.bg = 1;
+    const sig = JSON.stringify(me);
+    if (force || sig !== NET.last || NET.beatT <= 0) { NET.backend.setMe(me); NET.last = sig; NET.beatT = 1; }
+    NET.sendT = .14;
+  }
   function netTick(dt) {
     if (!NET.on) return;
     // other players' figures
@@ -1731,24 +1767,17 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
       p.walk += Math.hypot(p.x - ox, p.z - oz) * 22; p.av.legL.rotation.z = Math.sin(p.walk) * .7; p.av.legR.rotation.z = -Math.sin(p.walk) * .7;
       p.av.g.visible = p.s === 1; p.av.g.position.set(p.x, p.y, p.z); p.av.g.rotation.y = -p.a;
     }
-    // my own state, sent when it changes and as a heartbeat
     NET.sendT -= dt; NET.beatT -= dt;
-    if (NET.sendT <= 0) {
-      const s = cut ? 2 : st.won ? 3 : st.running ? 1 : 0;
-      if (NET.lastS === 3 && s === 1) NET.relocate = (NET.relocate || 0) + 1;
-      NET.lastS = s;
-      const me = { n: NET.name, x: r2(st.x), z: r2(st.z), a: r2(st.a), y: r2(st.y), s, e: cut ? cut.d.id : null, j: NET.join };
-      const sig = JSON.stringify(me);
-      if (sig !== NET.last || NET.beatT <= 0) { NET.backend.setMe(me); NET.last = sig; NET.beatT = 1; }
-      NET.sendT = .14;
-    }
+    if (NET.sendT <= 0) sendMe(false);
+    // the world has stopped arriving although somebody is supposed to run it: skip that player and let the next in line take over
+    if (!NET.host && NET.ready && NET.hostKey && NET.hostKey !== NET.me && performance.now() - NET.worldAt > 5000) { NET.stale[NET.hostKey] = 1; NET.worldAt = performance.now(); elect(); }
     if (NET.host && NET.ready) {
       NET.ensureT -= dt; if (NET.ensureT <= 0) { NET.ensureT = .6; hostEnsure(); }
       while (NET.relocate > 0) { NET.relocate--; relocateDino(); }
       NET.dinoT -= dt;
       if (NET.dinoT <= 0) { NET.dinoT = .16; const o = {};
         for (const d of dinos) o[d.id] = [r2(d.x), r2(d.z), r2(d.a), d.dead ? 3 : d.mode === "calm" && d.irk > .5 ? 1 : MODES.indexOf(d.mode), r2(Math.max(d.alertT, d.irk / DINO.patience * 1.9)), d.tid || (d.irk > .5 ? d.irkId : 0) || 0, d.lost > 0 ? 1 : 0];
-        NET.backend.setDinos(o); }
+        o.h = NET.me; o.t = NET.tick = ((NET.tick || 0) + 1) % 1e6; NET.backend.setDinos(o); }
     }
   }
   function resetWorld() { if (!NET.on) spawnAll(); }
@@ -1774,7 +1803,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
       const res = await NET.backend.login(key, name, await hashCode(key, code));
       if (!res.ok) { msgEl.textContent = "Неверный код, либо игрок с таким именем уже есть. Введите правильный код или выберите другое имя."; loggingIn = false; codeEl.select(); return; }
       try { localStorage.setItem("sticker-maze-name", name); } catch (err) {}
-      NET.me = key; NET.name = name; NET.join = NET.backend.now(); NET.on = true;
+      NET.me = key; NET.name = name; NET.join = NET.backend.now(); NET.on = true; NET.worldAt = performance.now();
       while (dinos.length) removeDino(dinos[0]);   // the shared world replaces the private one
       NET.backend.join(key, { players: onPlayers, dinos: onDinos });
       onlineWrap.hidden = false; msgEl.textContent = "";
