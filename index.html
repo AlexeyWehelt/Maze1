@@ -123,7 +123,7 @@ button { font: inherit; cursor: pointer; }
       <canvas id="mini" aria-label="Мини-карта" hidden></canvas>
     </div>
   </div>
-  <div class="stick" id="stick" aria-label="Движение: вперёд, назад, поворот"><i></i><i></i><i></i><i></i><div class="knob" id="knob"></div></div>
+  <div class="stick" id="stick" aria-label="Движение: вперёд, назад, вбок"><i></i><i></i><i></i><i></i><div class="knob" id="knob"></div></div>
   <div class="look" id="look" aria-label="Обзор: водите пальцем, как по тачпаду"><span>обзор</span></div>
   <button class="restart" id="restart">Заново <kbd>R</kbd></button>
   <div id="rotate">Поверните телефон горизонтально</div>
@@ -142,11 +142,11 @@ button { font: inherit; cursor: pointer; }
       </form>
       <div class="keys">
         <span class="desk"><kbd>W</kbd> <kbd>S</kbd> / <kbd>↑</kbd> <kbd>↓</kbd></span><span class="desk">вперёд и назад</span>
-        <span class="desk"><kbd>A</kbd> <kbd>D</kbd> / <kbd>←</kbd> <kbd>→</kbd></span><span class="desk">поворот</span>
+        <span class="desk"><kbd>A</kbd> <kbd>D</kbd> / <kbd>←</kbd> <kbd>→</kbd></span><span class="desk">шаг влево и вправо</span>
         <span class="desk">мышь</span><span class="desk">щёлкните по экрану — и поворачивайтесь мышью без ограничений; <kbd>Esc</kbd> освобождает курсор</span>
-        <span class="mob"><span>слева</span><span>джойстик: вверх и вниз — идти вперёд и назад, в стороны — поворот</span></span>
+        <span class="mob"><span>слева</span><span>джойстик: вверх и вниз — идти вперёд и назад, в стороны — шаг вбок</span></span>
         <span class="mob"><span>справа</span><span>тачпад обзора: ведите пальцем, чтобы осмотреться</span></span>
-        <span>прыжки</span><span>сами: набегите на предмет — и перепрыгнете его</span>
+        <span>прыжки</span><span>сами: набегите на предмет — и перепрыгнете его, мелочь под ногами перешагивается</span>
       </div>
     </div>
   </div>
@@ -759,7 +759,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
   let st = fresh(), showMap = false, lastM = 0;
 
   // Anything taller than your feet (plus a small step) blocks you; lower things can be jumped onto
-  const STEP = .035, JUMP_V = 2.8, GRAV = 9;
+  const STEP = .1, JUMP_V = 2.8, GRAV = 9;
   function footprint(x, z, fn) {
     const cx = x * K, cz = z * K, r = RAD * K;
     for (let c = Math.floor(cx - r); c <= Math.floor(cx + r); c++)
@@ -869,14 +869,18 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     if (!st.running || st.won) return;
     st.t += dt;
     let moving = false;
-    const turn = (keys["arrowleft"] || keys["a"] || keys["ф"] || move.l ? -1 : 0) + (keys["arrowright"] || keys["d"] || keys["в"] || move.r ? 1 : 0) + joyT;
-    st.a += (turn + edgeTurn) * 2.3 * dt;
+    // left/right step sideways (strafe); turning is the mouse or the look pad
+    const side = (keys["arrowright"] || keys["d"] || keys["в"] || move.r ? 1 : 0) - (keys["arrowleft"] || keys["a"] || keys["ф"] || move.l ? 1 : 0) + joyT;
+    st.a += edgeTurn * 2.3 * dt;
     st.a = Math.atan2(Math.sin(st.a), Math.cos(st.a));
     const fwd = (keys["arrowup"] || keys["w"] || keys["ц"] || move.f ? 1 : 0) - (keys["arrowdown"] || keys["s"] || keys["ы"] || move.b ? 1 : 0) + joyF;
-    if (fwd) {
-      const sp = 1.5 * dt * fwd, dx = Math.cos(st.a) * sp, dz = Math.sin(st.a) * sp, ox = st.x, oz = st.z;
-      // automatic jump: running into anything that isn't a wall hops over it
-      const sg = Math.sign(fwd), px = st.x + Math.cos(st.a) * sg * (RAD + .07), pz = st.z + Math.sin(st.a) * sg * (RAD + .07);
+    if (fwd || side) {
+      let mx = Math.cos(st.a) * fwd - Math.sin(st.a) * side, mz = Math.sin(st.a) * fwd + Math.cos(st.a) * side;
+      const ml = Math.hypot(mx, mz); if (ml > 1) { mx /= ml; mz /= ml; }
+      const ux = mx / (ml || 1), uz = mz / (ml || 1);
+      const dx = mx * 1.5 * dt, dz = mz * 1.5 * dt, ox = st.x, oz = st.z;
+      // automatic jump: running into anything that isn't a wall hops over it (small things underfoot are simply stepped over)
+      const px = st.x + ux * (RAD + .07), pz = st.z + uz * (RAD + .07);
       if (st.ground && hitProp(px, pz, st.y) && !hitWall(px, pz)) { st.vy = JUMP_V; st.ground = false; }
       if (!blocked(st.x + dx, st.z, st.y)) st.x += dx;
       if (!blocked(st.x, st.z + dz, st.y)) st.z += dz;
@@ -890,7 +894,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     const prevY = st.y;
     st.vy -= GRAV * dt; st.y += st.vy * dt;
     const gnd = groundAt(st.x, st.z, prevY);
-    if (st.y <= gnd) { if (st.vy < -1.2) { landBob = Math.min(.05, -st.vy * .012); playerStep(1.8); } st.y = gnd; st.vy = 0; st.ground = true; } else st.ground = false;
+    if (st.y <= gnd) { if (gnd - st.y > .01 && st.ground) landBob = Math.min(.1, landBob + gnd - st.y); if (st.vy < -1.2) { landBob = Math.min(.05, -st.vy * .012); playerStep(1.8); } st.y = gnd; st.vy = 0; st.ground = true; } else st.ground = false;
     // zone change with a short hold so borders don't flicker
     const b = zoneAt(st.x, st.z);
     if (b !== curZone) { if (b === pendingZone) { zoneHold += dt; if (zoneHold > .35) { curZone = b; if (!st.lands.includes(b)) st.lands.push(b); } } else { pendingZone = b; zoneHold = 0; } }
