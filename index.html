@@ -134,7 +134,7 @@ button { font: inherit; cursor: pointer; }
       <form id="login" class="login" novalidate>
         <div id="netFields" hidden>
           <label for="pname">Имя<input id="pname" name="pname" maxlength="16" autocomplete="username" autocapitalize="off" spellcheck="false"></label>
-          <label for="pcode">Код из 4 цифр<input id="pcode" name="pcode" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="0000"></label>
+          <label for="pcode">Пароль из 4 цифр<input id="pcode" name="pcode" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" placeholder="••••"></label>
         </div>
         <button class="go" id="start" type="submit">Войти</button>
         <p id="loginMsg" role="alert"></p>
@@ -894,7 +894,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     const prevY = st.y;
     st.vy -= GRAV * dt; st.y += st.vy * dt;
     const gnd = groundAt(st.x, st.z, prevY);
-    if (st.y <= gnd) { if (gnd - st.y > .01 && st.ground) landBob = Math.min(.1, landBob + gnd - st.y); if (st.vy < -1.2) { landBob = Math.min(.05, -st.vy * .012); playerStep(1.8); } st.y = gnd; st.vy = 0; st.ground = true; } else st.ground = false;
+    if (st.y <= gnd) { if (gnd - prevY > .01 && st.ground) landBob = Math.min(.1, landBob + gnd - st.y); if (st.vy < -1.2) { landBob = Math.min(.05, -st.vy * .012); playerStep(1.8); } st.y = gnd; st.vy = 0; st.ground = true; } else st.ground = false;
     // zone change with a short hold so borders don't flicker
     const b = zoneAt(st.x, st.z);
     if (b !== curZone) { if (b === pendingZone) { zoneHold += dt; if (zoneHold > .35) { curZone = b; if (!st.lands.includes(b)) st.lands.push(b); } } else { pendingZone = b; zoneHold = 0; } }
@@ -1801,11 +1801,11 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     if (!NET.backend) { begin(); return; }
     const name = nameEl.value.trim(), code = codeEl.value.trim(), key = keyOf(name);
     if (!key) { msgEl.textContent = "Введите имя."; nameEl.focus(); return; }
-    if (!/^\d{4}$/.test(code)) { msgEl.textContent = "Код — это четыре цифры."; codeEl.focus(); return; }
+    if (!/^\d{4}$/.test(code)) { msgEl.textContent = "Пароль — это четыре цифры."; codeEl.focus(); return; }
     loggingIn = true; msgEl.textContent = "Входим…";
     try {
       const res = await NET.backend.login(key, name, await hashCode(key, code));
-      if (!res.ok) { msgEl.textContent = "Неверный код, либо игрок с таким именем уже есть. Введите правильный код или выберите другое имя."; loggingIn = false; codeEl.select(); return; }
+      if (!res.ok) { msgEl.textContent = "Неверный пароль, либо игрок с таким именем уже есть. Введите правильный пароль или выберите другое имя."; loggingIn = false; codeEl.select(); return; }
       try { localStorage.setItem("sticker-maze-name", name); } catch (err) {}
       NET.me = key; NET.name = name; NET.join = NET.backend.now(); NET.on = true; NET.worldAt = performance.now();
       while (dinos.length) removeDino(dinos[0]);   // the shared world replaces the private one
