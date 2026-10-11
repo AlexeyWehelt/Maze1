@@ -909,9 +909,9 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     releaseMouse();
     st.won = true; st.running = false;
     document.getElementById("result").textContent = fmt(st.t) + " · " + Math.round(st.d) + " м · мест " + st.lands.length + "/28";
-    let best = null; try { best = parseFloat(localStorage.getItem("sticker-maze-best")); } catch (e) {}
+    let best = null; try { best = parseFloat(localStorage.getItem("sticker-maze-best" + ROOM)); } catch (e) {}
     const bestEl = document.getElementById("best");
-    if (!best || st.t < best) { try { localStorage.setItem("sticker-maze-best", String(st.t)); } catch (e) {} bestEl.textContent = best ? "Новый рекорд. Прошлый: " + fmt(best) + "." : "Первое прохождение. Попробуйте быстрее или загляните во все 28 мест."; }
+    if (!best || st.t < best) { try { localStorage.setItem("sticker-maze-best" + ROOM, String(st.t)); } catch (e) {} bestEl.textContent = best ? "Новый рекорд. Прошлый: " + fmt(best) + "." : "Первое прохождение. Попробуйте быстрее или загляните во все 28 мест."; }
     else bestEl.textContent = "Ваш рекорд: " + fmt(best) + ".";
     if (NET.on) NET.backend.saveBest(NET.me, Math.round(st.t * 10) / 10).then(showTop).catch(() => {}); else showTop();
     win.hidden = false; document.getElementById("again").focus();
@@ -1600,6 +1600,9 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
   // One shared world. Every player sends their own position; the player who joined first hosts the dinosaurs
   // (if they leave, the next one takes over). There are always players + 2 dinosaurs.
   const NET = { on: false, me: null, name: "", host: false, ready: false, players: {}, join: 0, backend: null, sendT: 0, beatT: 0, dinoT: 0, ensureT: 0, last: "", stale: {}, hostKey: null, worldAt: 0, tick: 0 };
+  // A separate copy of the game (window.MAZE_ROOM) gets its own shared world, players and records; names and passwords are common.
+  const ROOM = String(window.MAZE_ROOM || "").replace(/[^a-z0-9]/gi, "").slice(0, 12);
+  const P_PRES = ROOM ? "world/" + ROOM + "/p" : "presence", P_WORLD = ROOM ? "world/" + ROOM + "/d" : "world/d", BEST = ROOM ? "best_" + ROOM : "best";
   const keyOf = name => name.trim().toLowerCase().replace(/[.#$\[\]\/\s]+/g, "_").slice(0, 16);
   async function hashCode(key, code) {
     const txt = key + ":" + code;
@@ -1616,26 +1619,26 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
         const ref = db.ref("users/" + key);
         const res = await ref.transaction(cur => cur === null ? { name, h, c: fb.database.ServerValue.TIMESTAMP } : undefined);
         const u = res.snapshot.val(); if (!u || u.h !== h) return { ok: false };
-        return { ok: true, best: u.best || null, isNew: res.committed };
+        return { ok: true, best: u[BEST] || null, isNew: res.committed };
       },
       join(key, h) {
-        meRef = db.ref("presence/" + key);
+        meRef = db.ref(P_PRES + "/" + key);
         db.ref(".info/connected").on("value", s => { if (s.val()) { meRef.onDisconnect().remove(); if (lastMe) meRef.set(lastMe); } });
         // child events, so each move costs one small record instead of the whole list
-        const map = {}, pr = db.ref("presence"), put = s => { map[s.key] = s.val(); h.players(map); };
+        const map = {}, pr = db.ref(P_PRES), put = s => { map[s.key] = s.val(); h.players(map); };
         pr.on("child_added", put); pr.on("child_changed", put); pr.on("child_removed", s => { delete map[s.key]; h.players(map); });
         pr.once("value", () => h.players(map));
-        db.ref("world/d").on("value", s => h.dinos(s.val() || {}));
+        db.ref(P_WORLD).on("value", s => h.dinos(s.val() || {}));
       },
       setMe(data) { lastMe = data; if (meRef) meRef.set(data); },
-      setDinos(obj) { db.ref("world/d").set(obj); },
-      async saveBest(key, t) { await db.ref("users/" + key + "/best").transaction(cur => (cur === null || t < cur) ? t : undefined); },
-      async top() { const s = await db.ref("users").orderByChild("best").startAt(0.1).limitToFirst(10).get(); const out = []; s.forEach(c => { const v = c.val(); if (v && v.best) out.push({ name: v.name, best: v.best }); }); return out; }
+      setDinos(obj) { db.ref(P_WORLD).set(obj); },
+      async saveBest(key, t) { await db.ref("users/" + key + "/" + BEST).transaction(cur => (cur === null || t < cur) ? t : undefined); },
+      async top() { const s = await db.ref("users").orderByChild(BEST).startAt(0.1).limitToFirst(10).get(); const out = []; s.forEach(c => { const v = c.val(); if (v && v[BEST]) out.push({ name: v.name, best: v[BEST] }); }); return out; }
     };
   }
   // --- same-browser backend (address ends with #local): tabs of one browser play together, no server needed ---
   function makeLocal() {
-    const ch = new BroadcastChannel("sticker-maze"), seen = {}; let h = null, myKey = null, lastMe = null, world = {};
+    const ch = new BroadcastChannel("sticker-maze" + ROOM), seen = {}; let h = null, myKey = null, lastMe = null, world = {};
     const users = () => { try { return JSON.parse(localStorage.getItem("sticker-maze-users") || "{}"); } catch (e) { return {}; } };
     const save = u => { try { localStorage.setItem("sticker-maze-users", JSON.stringify(u)); } catch (e) {} };
     const push = () => { if (!h) return; const now = Date.now(), map = {}; for (const k in seen) { if (now - seen[k].at > 4000) delete seen[k]; else map[k] = seen[k].data; } if (lastMe) map[myKey] = lastMe; h.players(map); };
@@ -1648,12 +1651,12 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     setInterval(push, 1000);
     return {
       now: () => Date.now(),
-      async login(key, name, hsh) { const u = users(); if (!u[key]) { u[key] = { name, h: hsh }; save(u); return { ok: true, best: null, isNew: true }; } if (u[key].h !== hsh) return { ok: false }; return { ok: true, best: u[key].best || null }; },
+      async login(key, name, hsh) { const u = users(); if (!u[key]) { u[key] = { name, h: hsh }; save(u); return { ok: true, best: null, isNew: true }; } if (u[key].h !== hsh) return { ok: false }; return { ok: true, best: u[key][BEST] || null }; },
       join(key, handlers) { myKey = key; h = handlers; ch.postMessage({ k: "hello" }); setTimeout(() => { h.dinos(world); push(); }, 400); },
       setMe(data) { lastMe = data; ch.postMessage({ k: "p", key: myKey, data }); },
       setDinos(obj) { world = obj; ch.postMessage({ k: "d", obj }); },
-      async saveBest(key, t) { const u = users(); if (u[key] && (!u[key].best || t < u[key].best)) { u[key].best = t; save(u); } },
-      async top() { return Object.values(users()).filter(v => v.best).sort((a, b) => a.best - b.best).slice(0, 10).map(v => ({ name: v.name, best: v.best })); }
+      async saveBest(key, t) { const u = users(); if (u[key] && (!u[key][BEST] || t < u[key][BEST])) { u[key][BEST] = t; save(u); } },
+      async top() { return Object.values(users()).filter(v => v[BEST]).sort((a, b) => a[BEST] - b[BEST]).slice(0, 10).map(v => ({ name: v.name, best: v[BEST] })); }
     };
   }
   const loadScript = src => new Promise((ok, no) => { const s = document.createElement("script"); s.src = src; s.onload = ok; s.onerror = no; document.head.appendChild(s); });
