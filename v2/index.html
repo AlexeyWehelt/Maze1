@@ -85,6 +85,28 @@ button { font: inherit; cursor: pointer; }
 .touch .hud { left: calc(16px + env(safe-area-inset-left, 0px)); right: calc(16px + env(safe-area-inset-right, 0px)); }
 .overlay { overflow: auto; align-items: safe center; }
 @media (max-height: 480px) { .card { padding: 14px 18px; gap: 8px; max-width: 40rem; } .card h1 { font-size: 30px; } .card p { font-size: 13px; line-height: 1.35; } .keys { font-size: 12.5px; gap: 3px 12px; } #compass { width: 56px; height: 56px; } .stat { padding: 5px 9px; font-size: 12px; } }
+.bonus { position: absolute; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); display: flex; gap: 8px; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; touch-action: none; }
+.bon { display: grid; grid-template-columns: auto auto 1fr; align-items: center; gap: 2px 8px; min-width: 168px; background: var(--panel); border: 1.5px solid var(--line); border-radius: 8px; padding: 6px 10px; color: var(--ink); font: inherit; text-align: left; cursor: pointer; opacity: .78; }
+.bon kbd { grid-row: span 2; }
+.bon svg { grid-row: span 2; width: 30px; height: 30px; }
+.bon .nm { font-size: 12px; font-weight: 700; white-space: nowrap; display: flex; justify-content: space-between; gap: 8px; }
+.bon .nm em { font-style: normal; font-family: var(--mono); font-weight: 400; font-variant-numeric: tabular-nums; }
+.bar { height: 7px; border-radius: 4px; background: rgba(31,35,24,.15); overflow: hidden; display: flex; gap: 2px; }
+.bar i { flex: 1; background: rgba(31,35,24,.12); position: relative; overflow: hidden; }
+.bar i b { position: absolute; inset: 0; transform-origin: left; background: var(--c); }
+.bon.sel { opacity: 1; border-color: var(--graphite); box-shadow: 0 0 0 2px var(--paper), 0 3px 10px rgba(0,0,0,.35); }
+.bon.on { background: var(--paper); }
+.bon.on svg { animation: bpulse .5s ease-in-out infinite alternate; }
+.bon.empty .nm em { color: #7b806b; }
+@keyframes bpulse { to { transform: scale(1.15); } }
+@media (prefers-reduced-motion: reduce) { .bon.on svg { animation: none; } }
+#toast { position: absolute; left: 50%; top: 22%; transform: translateX(-50%); background: var(--paper); color: var(--graphite); font-family: var(--display); font-weight: 700; font-size: 28px; padding: 6px 16px; border-radius: 3px; box-shadow: 0 6px 18px rgba(0,0,0,.4); pointer-events: none; transition: opacity .3s; }
+.touch .bonus { left: auto; transform: none; right: calc(22px + env(safe-area-inset-right, 0px)); bottom: calc(18px + min(40vh, 150px) + 10px + env(safe-area-inset-bottom, 0px)); }
+.touch .bon { min-width: 0; grid-template-columns: auto 1fr; padding: 5px 8px; }
+.touch .bon kbd { display: none; }
+.touch .bon .nm span { display: none; }
+.touch .bon .bar { width: 64px; }
+@media (max-height: 480px) { .bon { padding: 4px 8px; } .bon svg { width: 24px; height: 24px; } }
 .restart { position: absolute; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px; font-size: 13px; }
 </style>
 
@@ -126,12 +148,17 @@ button { font: inherit; cursor: pointer; }
   </div>
   <div class="stick" id="stick" aria-label="Движение: вперёд, назад, вбок"><i></i><i></i><i></i><i></i><div class="knob" id="knob"></div></div>
   <div class="look" id="look" aria-label="Обзор: водите пальцем, как по тачпаду"><span>обзор</span></div>
+  <div class="bonus" id="bonus" aria-label="Бонусы">
+    <button class="bon sel" data-b="0" style="--c:#4f8fe8" type="button"><kbd>1</kbd><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 22c0-5 3-9 7-9s6 3 6 6v4c0 2-2 4-6 4H9c-2 0-4-2-4-5z" fill="#4f8fe8" stroke="#1f2318" stroke-width="1.5"/><path d="M7 18c1-3 3-5 5-5s4 2 4 5" fill="none" stroke="#fffbe8" stroke-width="3" stroke-linecap="round"/><path d="M15 15c0-5 3-9 7-9s6 3 6 6v4c0 2-2 4-6 4h-3c-2 0-4-2-4-5z" fill="#6aa6f5" stroke="#1f2318" stroke-width="1.5"/><path d="M17 11c1-3 3-5 5-5s4 2 4 5" fill="none" stroke="#fffbe8" stroke-width="3" stroke-linecap="round"/></svg><span class="nm"><span>Тапочки</span><em>0 с</em></span><span class="bar"><i><b></b></i><i><b></b></i><i><b></b></i></span></button>
+    <button class="bon" data-b="1" style="--c:#e8402a" type="button"><kbd>2</kbd><svg viewBox="0 0 32 32" aria-hidden="true"><rect x="9" y="4" width="14" height="25" rx="3" fill="#e8402a" stroke="#1f2318" stroke-width="1.5"/><rect x="9" y="8" width="14" height="3" fill="#ffd23a"/><path d="M18 12l-5 8h4l-2 7 6-9h-4l2-6z" fill="#ffd23a" stroke="#1f2318" stroke-width="1"/></svg><span class="nm"><span>Энергетик</span><em>0 с</em></span><span class="bar"><i><b></b></i><i><b></b></i><i><b></b></i></span></button>
+  </div>
+  <div id="toast" hidden></div>
   <button class="restart" id="restart">Заново <kbd>R</kbd></button>
   <div id="rotate">Поверните телефон горизонтально</div>
   <div class="overlay" id="intro">
     <div class="card">
       <h1>Лабиринт со стикера</h1>
-      <p>Найдите выход.</p>
+      <p>Найдите выход. По дороге собирайте тапочки — в них динозавр не слышит шагов — и энергетик, он ускоряет бег.</p>
       <form id="login" class="login" novalidate>
         <div id="netFields" hidden>
           <label for="pname">Имя<input id="pname" name="pname" maxlength="16" autocomplete="username" autocapitalize="off" spellcheck="false"></label>
@@ -147,6 +174,8 @@ button { font: inherit; cursor: pointer; }
         <span class="desk">мышь</span><span class="desk">щёлкните по экрану — и поворачивайтесь мышью без ограничений; <kbd>Esc</kbd> освобождает курсор</span>
         <span class="mob"><span>слева</span><span>джойстик: вверх и вниз — идти вперёд и назад, в стороны — шаг вбок</span></span>
         <span class="mob"><span>справа</span><span>тачпад обзора: ведите пальцем, чтобы осмотреться</span></span>
+        <span class="desk"><kbd>1</kbd> <kbd>2</kbd> · <kbd>Ctrl</kbd></span><span class="desk">выбрать бонус и держать, пока он нужен (вместо <kbd>Ctrl</kbd> можно <kbd>Shift</kbd>)</span>
+        <span class="mob"><span>бонусы</span><span>кнопки над тачпадом: держите, пока бонус нужен</span></span>
         <span>прыжки</span><span>сами: набегите на предмет — и перепрыгнете его, мелочь под ногами перешагивается</span>
       </div>
     </div>
@@ -801,13 +830,16 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     const k = e.key.toLowerCase();
     if (["arrowup", "arrowdown", "arrowleft", "arrowright", " "].includes(k)) e.preventDefault();
     keys[k] = true;
+    // bonuses: 1, 2… choose which one, Ctrl (or Shift) uses it while held; keep the browser's own Ctrl shortcuts out of the way
+    if (e.code && /^(Digit|Numpad)[1-9]$/.test(e.code) && intro.hidden) { const n = +e.code.slice(-1) - 1; if (n < BONUS.length) bonusSelect(n); }
+    if (e.ctrlKey && intro.hidden && !["c", "v", "x", "с", "м", "ч"].includes(k)) e.preventDefault();
     // secret: press M twice quickly to toggle the map
     if ((k === "m" || k === "ь") && !e.repeat) secretTap();
-    if ((k === "r" || k === "к") && !e.repeat && !cut && intro.hidden) { restart(); resetWorld(); }
+    if ((k === "r" || k === "к") && !e.repeat && !e.ctrlKey && !cut && intro.hidden) { restart(); resetWorld(); }
     if (k === "enter") { if (!intro.hidden) loginForm.requestSubmit(); else if (!win.hidden) { restart(); resetWorld(); } }
   });
   addEventListener("keyup", e => { keys[e.key.toLowerCase()] = false; });
-  addEventListener("blur", () => { for (const k in keys) keys[k] = false; });
+  addEventListener("blur", () => { for (const k in keys) keys[k] = false; bonusHold = false; });
   // ---- touch controls: left stick moves and turns like the keys, right pad looks around like a mouse ----
   const gameEl = document.getElementById("game");
   const isTouch = matchMedia("(pointer: coarse)").matches;
@@ -858,7 +890,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
   let zoneTimer = 0, curZone = -1, zoneHold = 0, pendingZone = -1;
   function showZone() {}
   function begin() { audioInit(); goLandscape(); intro.hidden = true; st.running = true; curZone = zoneAt(st.x, st.z); }
-  function restart() { st = fresh(); pitch = 0; win.hidden = true; st.running = intro.hidden; curZone = zoneAt(st.x, st.z); reveal(); updateHud(); drawMini(); }
+  function restart() { bonusReset(); st = fresh(); pitch = 0; win.hidden = true; st.running = intro.hidden; curZone = zoneAt(st.x, st.z); reveal(); updateHud(); drawMini(); }
   document.getElementById("restart").addEventListener("click", () => { if (cut) return; audioInit(); restart(); resetWorld(); });
   document.getElementById("again").addEventListener("click", () => { audioInit(); restart(); resetWorld(); });
 
@@ -869,6 +901,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     if (caughtT > 0) { caughtT -= dt; if (caughtT <= 0) caughtEl.hidden = true; }
     if (!st.running || st.won) return;
     st.t += dt;
+    bonusUpdate(dt);
     let moving = false;
     // left/right step sideways (strafe); turning is the mouse or the look pad
     const side = (keys["arrowright"] || keys["d"] || keys["в"] || move.r ? 1 : 0) - (keys["arrowleft"] || keys["a"] || keys["ф"] || move.l ? 1 : 0) + joyT;
@@ -879,7 +912,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
       let mx = Math.cos(st.a) * fwd - Math.sin(st.a) * side, mz = Math.sin(st.a) * fwd + Math.cos(st.a) * side;
       const ml = Math.hypot(mx, mz); if (ml > 1) { mx /= ml; mz /= ml; }
       const ux = mx / (ml || 1), uz = mz / (ml || 1);
-      const dx = mx * 1.5 * dt, dz = mz * 1.5 * dt, ox = st.x, oz = st.z;
+      const spd = 1.5 * (bonusOn(1) ? 1.1 : 1), dx = mx * spd * dt, dz = mz * spd * dt, ox = st.x, oz = st.z;
       // automatic jump: running into anything that isn't a wall hops over it (small things underfoot are simply stepped over)
       const px = st.x + ux * (RAD + .07), pz = st.z + uz * (RAD + .07);
       if (st.ground && hitProp(px, pz, st.y) && !hitWall(px, pz)) { st.vy = JUMP_V; st.ground = false; }
@@ -1351,7 +1384,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     { f: 1100, q: 2, dur: .05, vol: .15, thump: 1, wet: .6 } // cave rock
   ];
   function playerStep(loud = 1) {
-    if (!actx) return; const sp = STEP_SOUND[biomeAt(st.x, st.z)], t = actx.currentTime, out = outNode(sp.vol * loud * rr(.8, 1.15), rr(-.1, .1), 0, sp.wet || .12);
+    if (!actx) return; if (bonusOn(0)) loud *= .25;  /* soft slippers */ const sp = STEP_SOUND[biomeAt(st.x, st.z)], t = actx.currentTime, out = outNode(sp.vol * loud * rr(.8, 1.15), rr(-.1, .1), 0, sp.wet || .12);
     const n = noiseSrc(t, sp.dur), b = band(sp.f * rr(.85, 1.15), sp.q), g = actx.createGain(); aenv(g, t, .004, 1, 0, sp.dur); n.connect(b).connect(g).connect(out);
     if (sp.grit) for (let i = 0; i < 4; i++) { const tt = t + rnd() * sp.dur, n2 = noiseSrc(tt, .01), g2 = actx.createGain(); aenv(g2, tt, .001, .6, 0, .01); n2.connect(band(5000, 2)).connect(g2).connect(out); }
     if (sp.tick) { const n2 = noiseSrc(t + .02, .02), g2 = actx.createGain(); aenv(g2, t + .02, .001, .7, 0, .02); n2.connect(band(6000, 3)).connect(g2).connect(out); }
@@ -1383,7 +1416,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     // wears its patience out. When patience runs out it charges into the zone after that player.
     // (it notices them in front of it, or hears them fidgeting within 3 m, as long as no wall is in between)
     const plain = p => { const dx = p.x - d.x, dz = p.z - d.z, dist = Math.hypot(dx, dz); if (dist >= DINO.teaseRange) return false;
-      let ang = Math.atan2(dz, dx) - d.a; ang = Math.atan2(Math.sin(ang), Math.cos(ang)); return (Math.abs(ang) <= DINO.fov * 1.3 || dist < 3) && lineOfSight(d.x, d.z, p.x, p.z); };
+      let ang = Math.atan2(dz, dx) - d.a; ang = Math.atan2(Math.sin(ang), Math.cos(ang)); return (Math.abs(ang) <= DINO.fov * 1.3 || (dist < 3 && !p.quiet)) && lineOfSight(d.x, d.z, p.x, p.z); };
     let teaser = null; d.glare = false;
     if (d.mode !== "rage") {
       // Losing someone into the start zone is an ordinary lost target: it searches, forgets and wanders on as usual.
@@ -1430,7 +1463,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     } else if (d.mode === "calm") {
       // footsteps pull it toward the sound, without making it angry
       d.hearT -= dt;
-      if (d.hearT <= 0) { const h = P.filter(p => !p.safe && p.moving && p.ground && Math.hypot(p.x - d.x, p.z - d.z) < DINO.hear).sort(near)[0]; if (h) { pickWander(d, h.x, h.z); d.hearT = 1.2; } }
+      if (d.hearT <= 0) { const h = P.filter(p => !p.safe && p.moving && p.ground && !p.quiet && Math.hypot(p.x - d.x, p.z - d.z) < DINO.hear).sort(near)[0]; if (h) { pickWander(d, h.x, h.z); d.hearT = 1.2; } }
     }
     const here = nearestNav(idxOf(d.x, d.z));
     let cur = here, step = here;
@@ -1597,6 +1630,111 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     if (t >= 5) { cut = null; human.visible = false; restart(); if (NET.on) { d.net && Object.assign(d, { x: d.net.x, z: d.net.z }); if (NET.host) { d.mode = "calm"; d.tid = null; d.alertT = 0; pickWander(d); } } else spawnAll(); caughtT = 1.2; fadeEl.style.opacity = 0; }
   }
 
+  // ---------- bonuses: slippers (dinosaurs can't hear your steps) and an energy drink (runs 1.1× faster) ----------
+  // Each find adds 10 s to that bonus; it is spent only while the use key (Ctrl or Shift) or its phone button is held.
+  // Finds lie about the maze for each player on their own, and new ones turn up every so often.
+  const BONUS = [{ name: "Тапочки", col: 0x4f8fe8 }, { name: "Энергетик", col: 0xe8402a }];
+  const BONUS_ADD = 10, BONUS_MAX = 30, PICK_MAX = 16, PICK_EVERY = 12, PICK_R = .24;
+  const bon = { c: [0, 0], sel: 0, on: -1 }; let bonusHold = false, toastT = 0;
+  const bonEls = [...document.querySelectorAll("#bonus .bon")], toastEl = document.getElementById("toast");
+  function bonusOn(i) { return bon.on === i; }
+  function bonusSelect(i) { bon.sel = i; bonusHud(); }
+  function bonusReset() { bon.c = [0, 0]; bon.on = -1; bonusHud(); }
+  function bonusHud() {
+    bonEls.forEach((el, i) => {
+      el.classList.toggle("sel", i === bon.sel); el.classList.toggle("on", i === bon.on); el.classList.toggle("empty", bon.c[i] <= 0);
+      el.querySelector("em").textContent = bon.c[i] > 0 ? Math.ceil(bon.c[i]) + " с" : "0 с";
+      el.querySelectorAll(".bar b").forEach((b, k) => { b.style.transform = `scaleX(${Math.max(0, Math.min(1, (bon.c[i] - k * BONUS_ADD) / BONUS_ADD))})`; });
+    });
+  }
+  function toast(text) { toastEl.textContent = text; toastEl.hidden = false; toastEl.style.opacity = 1; toastT = 1.6; }
+  // phone / mouse: a press on a bonus chooses it and uses it for as long as it is held
+  for (const el of bonEls) {
+    const i = +el.dataset.b; let id = null;
+    el.addEventListener("pointerdown", e => { e.preventDefault(); e.stopPropagation(); id = e.pointerId; try { el.setPointerCapture(id); } catch (err) {} bonusSelect(i); bonusHold = true; });
+    const up = e => { if (e.pointerId !== id) return; id = null; bonusHold = false; };
+    el.addEventListener("pointerup", up); el.addEventListener("pointercancel", up); el.addEventListener("lostpointercapture", up);
+    el.addEventListener("click", e => e.preventDefault());
+  }
+  // closing the tab with Ctrl+W by accident while holding the bonus: the browser asks first
+  addEventListener("beforeunload", e => { if (st.running && !st.won) { e.preventDefault(); e.returnValue = ""; } });
+
+  // the finds themselves
+  function slipperGeo() {
+    const shape = new THREE.Shape(); shape.moveTo(-.055, 0); shape.bezierCurveTo(-.055, .03, -.025, .034, 0, .032); shape.bezierCurveTo(.035, .03, .06, .022, .06, 0);
+    shape.bezierCurveTo(.06, -.022, .035, -.03, 0, -.032); shape.bezierCurveTo(-.025, -.034, -.055, -.03, -.055, 0);
+    const sole = new THREE.ExtrudeGeometry(shape, { depth: .014, bevelEnabled: true, bevelSize: .004, bevelThickness: .004, bevelSegments: 2 }); sole.rotateX(-Math.PI / 2);
+    return sole;
+  }
+  const SOLE = slipperGeo(), STRAP = new THREE.TorusGeometry(.026, .009, 6, 14, Math.PI); STRAP.rotateY(Math.PI / 2);
+  const canTex = (() => { const cv = document.createElement("canvas"); cv.width = 128; cv.height = 128; const c = cv.getContext("2d");
+    c.fillStyle = "#e8402a"; c.fillRect(0, 0, 128, 128); c.fillStyle = "#ffd23a"; c.fillRect(0, 18, 128, 14); c.fillRect(0, 100, 128, 8);
+    c.beginPath(); c.moveTo(70, 38); c.lineTo(46, 74); c.lineTo(62, 74); c.lineTo(52, 98); c.lineTo(84, 60); c.lineTo(67, 60); c.lineTo(78, 38); c.closePath(); c.fill(); c.strokeStyle = "#1f2318"; c.lineWidth = 2; c.stroke();
+    return new THREE.CanvasTexture(cv); })();
+  const CAN = new THREE.CylinderGeometry(.026, .026, .1, 18), CAN_TOP = new THREE.CylinderGeometry(.022, .026, .008, 18);
+  const glowTex = (() => { const cv = document.createElement("canvas"); cv.width = cv.height = 64; const c = cv.getContext("2d"), g = c.createRadialGradient(32, 32, 0, 32, 32, 32);
+    g.addColorStop(0, "rgba(255,255,230,.9)"); g.addColorStop(.35, "rgba(255,240,170,.35)"); g.addColorStop(1, "rgba(255,240,170,0)"); c.fillStyle = g; c.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(cv); })();
+  function makeFind(type) {
+    const g = new THREE.Group(), spin = new THREE.Group(); g.add(spin);
+    if (type === 0) {
+      const sole = new THREE.MeshLambertMaterial({ color: 0x4f8fe8 }), strap = new THREE.MeshLambertMaterial({ color: 0xfffbe8 });
+      for (const side of [-1, 1]) { const m = new THREE.Mesh(SOLE, sole); m.position.set(0, 0, side * .036); spin.add(m);
+        const st2 = new THREE.Mesh(STRAP, strap); st2.position.set(.012, .016, side * .036); spin.add(st2); }
+      spin.rotation.z = .25;
+    } else {
+      const body = new THREE.Mesh(CAN, [new THREE.MeshLambertMaterial({ map: canTex }), new THREE.MeshLambertMaterial({ color: 0xc8ccd0 }), new THREE.MeshLambertMaterial({ color: 0xc8ccd0 })]);
+      spin.add(body); const top = new THREE.Mesh(CAN_TOP, new THREE.MeshLambertMaterial({ color: 0xc8ccd0 })); top.position.y = .054; spin.add(top);
+    }
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: BONUS[type].col, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+    glow.scale.set(.32, .32, 1); g.add(glow);
+    const ring = new THREE.Mesh(new THREE.RingGeometry(.09, .115, 28), new THREE.MeshBasicMaterial({ color: BONUS[type].col, transparent: true, opacity: .55, side: THREE.DoubleSide, depthWrite: false }));
+    ring.rotation.x = -Math.PI / 2; ring.position.y = .006; g.add(ring);
+    scene.add(g); return { g, spin, ring };
+  }
+  const finds = []; let findT = 0;
+  function findSpot() {
+    for (let t = 0; t < 60; t++) {
+      const i = navCells[Math.floor(rnd() * navCells.length)], x = cellX(i), z = cellZ(i);
+      if (Math.hypot(x - SX, z - SZ) < 3 || Math.hypot(x - EX, z - EZ) < 1.5 || Math.hypot(x - st.x, z - st.z) < 2) continue;
+      if (collH[i] > 0 || finds.some(f => Math.hypot(f.x - x, f.z - z) < 2.5)) continue;
+      return [x, z];
+    }
+    return null;
+  }
+  function addFind() {
+    const p = findSpot(); if (!p) return;
+    const type = finds.filter(f => f.type === 0).length <= finds.filter(f => f.type === 1).length ? 0 : 1;
+    const f = { type, x: p[0], z: p[1], y: Math.max(0, hAt(p[0], p[1])), ph: rnd() * 6.28, ...makeFind(type) };
+    f.g.position.set(f.x, 0, f.z); finds.push(f);
+  }
+  function pickChime(type) {
+    if (!actx) return; const t = actx.currentTime, out = outNode(.22, 0, 0, .25);
+    (type === 0 ? [660, 880] : [520, 780, 1040]).forEach((fq, k) => { const o = actx.createOscillator(), g = actx.createGain(); o.type = "triangle"; o.frequency.value = fq; aenv(g, t + k * .07, .005, .6, 0, .22); o.connect(g).connect(out); o.start(t + k * .07); o.stop(t + k * .07 + .3); });
+  }
+  function bonusUpdate(dt) {
+    // using: the chosen bonus burns while the key / button is held and it has charge left
+    const want = (keys["control"] || keys["shift"] || bonusHold) && !cut ? bon.sel : -1;
+    const on = want >= 0 && bon.c[want] > 0 ? want : -1;
+    if (on >= 0) bon.c[on] = Math.max(0, bon.c[on] - dt);
+    if (on !== bon.on) { bon.on = on; bonusHud(); }
+    // picking up
+    for (let k = finds.length - 1; k >= 0; k--) { const f = finds[k];
+      if (Math.hypot(f.x - st.x, f.z - st.z) < PICK_R && st.y < .2) {
+        if (bon.c[f.type] >= BONUS_MAX) continue;
+        bon.c[f.type] = Math.min(BONUS_MAX, bon.c[f.type] + BONUS_ADD); scene.remove(f.g); finds.splice(k, 1);
+        pickChime(f.type); toast(BONUS[f.type].name + " +" + BONUS_ADD + " с"); bonusHud(); } }
+  }
+  function findsTick(dt, now) {
+    if (!navCells.length) return;
+    if (!finds.length) for (let k = 0; k < PICK_MAX * .75; k++) addFind();
+    findT += dt; if (findT > PICK_EVERY && finds.length < PICK_MAX) { findT = 0; addFind(); }
+    for (const f of finds) { f.spin.position.y = .07 + Math.sin(now * .003 + f.ph) * .015; f.spin.rotation.y += dt * 1.6; f.ring.scale.setScalar(1 + Math.sin(now * .004 + f.ph) * .12); }
+    if (toastT > 0) { toastT -= dt; if (toastT < .3) toastEl.style.opacity = Math.max(0, toastT / .3); if (toastT <= 0) toastEl.hidden = true; }
+    // the energy drink widens the view a little while it runs
+    const fov = bonusOn(1) ? 81 : 75; if (Math.abs(camera.fov - fov) > .05) { camera.fov += (fov - camera.fov) * Math.min(1, dt * 6); camera.updateProjectionMatrix(); }
+  }
+  bonusHud();
+
   // ---------- multiplayer ----------
   // One shared world. Every player sends their own position; the player who joined first hosts the dinosaurs
   // (if they leave, the next one takes over). There are always players + 2 dinosaurs.
@@ -1688,8 +1826,8 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
   }
   function activePlayers() {
     const L = [];
-    if (st.running && !st.won && !cut) L.push({ id: NET.on ? NET.me : "me", x: st.x, z: st.z, moving: localMoving, ground: st.ground, safe: safeAt(st.x, st.z) });
-    if (NET.on) for (const p of Object.values(NET.players)) if (p.s === 1) L.push({ id: p.key, x: p.x, z: p.z, moving: performance.now() < p.movingUntil, ground: p.y < .03, safe: safeAt(p.x, p.z) });
+    if (st.running && !st.won && !cut) L.push({ id: NET.on ? NET.me : "me", x: st.x, z: st.z, moving: localMoving, ground: st.ground, safe: safeAt(st.x, st.z), quiet: bonusOn(0) });
+    if (NET.on) for (const p of Object.values(NET.players)) if (p.s === 1) L.push({ id: p.key, x: p.x, z: p.z, moving: performance.now() < p.movingUntil, ground: p.y < .03, safe: safeAt(p.x, p.z), quiet: !!p.q });
     return L;
   }
   const onlineEl = document.getElementById("online"), onlineWrap = document.getElementById("onlineWrap");
@@ -1700,7 +1838,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
       if (!p) p = NET.players[key] = { key, name: String(v.n || key).slice(0, 16), x: v.x, z: v.z, a: v.a, y: v.y || 0, tx: v.x, tz: v.z, ta: v.a, movingUntil: 0, walk: 0, av: makeAvatar(String(v.n || key).slice(0, 16)) };
       if (Math.hypot(v.x - p.tx, v.z - p.tz) > .01) p.movingUntil = now + 450;
       if (p.s === 3 && v.s === 1) NET.relocate = (NET.relocate || 0) + 1;
-      p.tx = v.x; p.tz = v.z; p.ta = v.a; p.y = v.y || 0; p.s = v.s; p.e = v.e || null; p.j = v.j || 0; p.bg = !!v.bg;
+      p.tx = v.x; p.tz = v.z; p.ta = v.a; p.y = v.y || 0; p.s = v.s; p.e = v.e || null; p.j = v.j || 0; p.bg = !!v.bg; p.q = !!v.q;
     }
     for (const key in NET.players) if (!(key in map)) { scene.remove(NET.players[key].av.g); delete NET.players[key]; }
     // the earliest joiner hosts the dinosaurs
@@ -1762,6 +1900,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     NET.lastS = s;
     const me = { n: NET.name, x: r2(st.x), z: r2(st.z), a: r2(st.a), y: r2(st.y), s, e: cut ? cut.d.id : null, j: NET.join };
     if (document.hidden) me.bg = 1;
+    if (bonusOn(0)) me.q = 1;
     const sig = JSON.stringify(me);
     if (force || sig !== NET.last || NET.beatT <= 0) { NET.backend.setMe(me); NET.last = sig; NET.beatT = 1; }
     NET.sendT = .14;
@@ -1863,7 +2002,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
   let last = performance.now(), hudT = 0;
   function frame(now) {
     const dt = Math.min(.05, (now - last) / 1000); last = now;
-    update(dt); worldUpdate(dt); netTick(dt); blendEnv(dt); updateTorches(now);
+    update(dt); findsTick(dt, now); worldUpdate(dt); netTick(dt); blendEnv(dt); updateTorches(now);
     landBob *= Math.exp(-dt * 10);
     const y = EYE + st.y - landBob + (reduce || !st.ground ? 0 : Math.sin(bob) * .015);
     if (!cut) { camera.position.set(st.x, y, st.z); camera.lookAt(st.x + Math.cos(st.a), y + Math.tan(pitch), st.z + Math.sin(st.a)); }
