@@ -149,8 +149,8 @@ button { font: inherit; cursor: pointer; }
   <div class="stick" id="stick" aria-label="Движение: вперёд, назад, вбок"><i></i><i></i><i></i><i></i><div class="knob" id="knob"></div></div>
   <div class="look" id="look" aria-label="Обзор: водите пальцем, как по тачпаду"><span>обзор</span></div>
   <div class="bonus" id="bonus" aria-label="Бонусы">
-    <button class="bon sel" data-b="0" style="--c:#4f8fe8" type="button"><kbd>1</kbd><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 22c0-5 3-9 7-9s6 3 6 6v4c0 2-2 4-6 4H9c-2 0-4-2-4-5z" fill="#4f8fe8" stroke="#1f2318" stroke-width="1.5"/><path d="M7 18c1-3 3-5 5-5s4 2 4 5" fill="none" stroke="#fffbe8" stroke-width="3" stroke-linecap="round"/><path d="M15 15c0-5 3-9 7-9s6 3 6 6v4c0 2-2 4-6 4h-3c-2 0-4-2-4-5z" fill="#6aa6f5" stroke="#1f2318" stroke-width="1.5"/><path d="M17 11c1-3 3-5 5-5s4 2 4 5" fill="none" stroke="#fffbe8" stroke-width="3" stroke-linecap="round"/></svg><span class="nm"><span>Тапочки</span><em>0 с</em></span><span class="bar"><i><b></b></i><i><b></b></i><i><b></b></i></span></button>
-    <button class="bon" data-b="1" style="--c:#e8402a" type="button"><kbd>2</kbd><svg viewBox="0 0 32 32" aria-hidden="true"><rect x="9" y="4" width="14" height="25" rx="3" fill="#e8402a" stroke="#1f2318" stroke-width="1.5"/><rect x="9" y="8" width="14" height="3" fill="#ffd23a"/><path d="M18 12l-5 8h4l-2 7 6-9h-4l2-6z" fill="#ffd23a" stroke="#1f2318" stroke-width="1"/></svg><span class="nm"><span>Энергетик</span><em>0 с</em></span><span class="bar"><i><b></b></i><i><b></b></i><i><b></b></i></span></button>
+    <button class="bon sel" hidden data-b="0" style="--c:#4f8fe8" type="button"><kbd>1</kbd><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 22c0-5 3-9 7-9s6 3 6 6v4c0 2-2 4-6 4H9c-2 0-4-2-4-5z" fill="#4f8fe8" stroke="#1f2318" stroke-width="1.5"/><path d="M7 18c1-3 3-5 5-5s4 2 4 5" fill="none" stroke="#fffbe8" stroke-width="3" stroke-linecap="round"/><path d="M15 15c0-5 3-9 7-9s6 3 6 6v4c0 2-2 4-6 4h-3c-2 0-4-2-4-5z" fill="#6aa6f5" stroke="#1f2318" stroke-width="1.5"/><path d="M17 11c1-3 3-5 5-5s4 2 4 5" fill="none" stroke="#fffbe8" stroke-width="3" stroke-linecap="round"/></svg><span class="nm"><span>Тапочки</span><em>0 с</em></span><span class="bar"><i><b></b></i><i><b></b></i><i><b></b></i></span></button>
+    <button class="bon" hidden data-b="1" style="--c:#e8402a" type="button"><kbd>2</kbd><svg viewBox="0 0 32 32" aria-hidden="true"><rect x="9" y="4" width="14" height="25" rx="3" fill="#e8402a" stroke="#1f2318" stroke-width="1.5"/><rect x="9" y="8" width="14" height="3" fill="#ffd23a"/><path d="M18 12l-5 8h4l-2 7 6-9h-4l2-6z" fill="#ffd23a" stroke="#1f2318" stroke-width="1"/></svg><span class="nm"><span>Энергетик</span><em>0 с</em></span><span class="bar"><i><b></b></i><i><b></b></i><i><b></b></i></span></button>
   </div>
   <div id="toast" hidden></div>
   <button class="restart" id="restart">Заново <kbd>R</kbd></button>
@@ -174,7 +174,7 @@ button { font: inherit; cursor: pointer; }
         <span class="desk">мышь</span><span class="desk">щёлкните по экрану — и поворачивайтесь мышью без ограничений; <kbd>Esc</kbd> освобождает курсор</span>
         <span class="mob"><span>слева</span><span>джойстик: вверх и вниз — идти вперёд и назад, в стороны — шаг вбок</span></span>
         <span class="mob"><span>справа</span><span>тачпад обзора: ведите пальцем, чтобы осмотреться</span></span>
-        <span class="desk"><kbd>1</kbd> <kbd>2</kbd> · <kbd>Ctrl</kbd></span><span class="desk">выбрать бонус и держать, пока он нужен (вместо <kbd>Ctrl</kbd> можно <kbd>Shift</kbd>)</span>
+        <span class="desk"><kbd>1</kbd> <kbd>2</kbd> · <kbd>Shift</kbd></span><span class="desk">выбрать бонус и держать <kbd>Shift</kbd>, пока он нужен</span>
         <span class="mob"><span>бонусы</span><span>кнопки над тачпадом: держите, пока бонус нужен</span></span>
         <span>прыжки</span><span>сами: набегите на предмет — и перепрыгнете его, мелочь под ногами перешагивается</span>
       </div>
@@ -830,9 +830,8 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     const k = e.key.toLowerCase();
     if (["arrowup", "arrowdown", "arrowleft", "arrowright", " "].includes(k)) e.preventDefault();
     keys[k] = true;
-    // bonuses: 1, 2… choose which one, Ctrl (or Shift) uses it while held; keep the browser's own Ctrl shortcuts out of the way
-    if (e.code && /^(Digit|Numpad)[1-9]$/.test(e.code) && intro.hidden) { const n = +e.code.slice(-1) - 1; if (n < BONUS.length) bonusSelect(n); }
-    if (e.ctrlKey && intro.hidden && !["c", "v", "x", "с", "м", "ч"].includes(k)) e.preventDefault();
+    // bonuses: 1, 2… choose which one, Shift uses it while held
+    if (e.code && /^(Digit|Numpad)[1-9]$/.test(e.code) && intro.hidden) { const n = +e.code.slice(-1) - 1; if (n < BONUS.length && bon.c[n] > 0) bonusSelect(n); }
     // secret: press M twice quickly to toggle the map
     if ((k === "m" || k === "ь") && !e.repeat) secretTap();
     if ((k === "r" || k === "к") && !e.repeat && !e.ctrlKey && !cut && intro.hidden) { restart(); resetWorld(); }
@@ -1631,7 +1630,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
   }
 
   // ---------- bonuses: slippers (dinosaurs can't hear your steps) and an energy drink (runs 1.1× faster) ----------
-  // Each find adds 10 s to that bonus; it is spent only while the use key (Ctrl or Shift) or its phone button is held.
+  // Each find adds 10 s to that bonus; it is spent only while Shift or its phone button is held. A bonus you have none of is not shown.
   // Finds lie about the maze for each player on their own, and new ones turn up every so often.
   const BONUS = [{ name: "Тапочки", col: 0x4f8fe8 }, { name: "Энергетик", col: 0xe8402a }];
   const BONUS_ADD = 10, BONUS_MAX = 30, PICK_MAX = 16, PICK_EVERY = 12, PICK_R = .24;
@@ -1642,7 +1641,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
   function bonusReset() { bon.c = [0, 0]; bon.on = -1; bonusHud(); }
   function bonusHud() {
     bonEls.forEach((el, i) => {
-      el.classList.toggle("sel", i === bon.sel); el.classList.toggle("on", i === bon.on); el.classList.toggle("empty", bon.c[i] <= 0);
+      el.hidden = bon.c[i] <= 0; el.classList.toggle("sel", i === bon.sel); el.classList.toggle("on", i === bon.on); el.classList.toggle("empty", bon.c[i] <= 0);
       el.querySelector("em").textContent = bon.c[i] > 0 ? Math.ceil(bon.c[i]) + " с" : "0 с";
       el.querySelectorAll(".bar b").forEach((b, k) => { b.style.transform = `scaleX(${Math.max(0, Math.min(1, (bon.c[i] - k * BONUS_ADD) / BONUS_ADD))})`; });
     });
@@ -1656,8 +1655,6 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     el.addEventListener("pointerup", up); el.addEventListener("pointercancel", up); el.addEventListener("lostpointercapture", up);
     el.addEventListener("click", e => e.preventDefault());
   }
-  // closing the tab with Ctrl+W by accident while holding the bonus: the browser asks first
-  addEventListener("beforeunload", e => { if (st.running && !st.won) { e.preventDefault(); e.returnValue = ""; } });
 
   // the finds themselves
   function slipperGeo() {
@@ -1713,7 +1710,10 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
   }
   function bonusUpdate(dt) {
     // using: the chosen bonus burns while the key / button is held and it has charge left
-    const want = (keys["control"] || keys["shift"] || bonusHold) && !cut ? bon.sel : -1;
+    const held = (keys["shift"] || bonusHold) && !cut;
+    // the chosen one ran out: once the key is let go, switch to whatever is left
+    if (bon.c[bon.sel] <= 0 && !held) { const other = bon.c.findIndex(c => c > 0); if (other >= 0 && other !== bon.sel) bonusSelect(other); }
+    const want = held ? bon.sel : -1;
     const on = want >= 0 && bon.c[want] > 0 ? want : -1;
     if (on >= 0) bon.c[on] = Math.max(0, bon.c[on] - dt);
     if (on !== bon.on) { bon.on = on; bonusHud(); }
@@ -1721,6 +1721,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     for (let k = finds.length - 1; k >= 0; k--) { const f = finds[k];
       if (Math.hypot(f.x - st.x, f.z - st.z) < PICK_R && st.y < .2) {
         if (bon.c[f.type] >= BONUS_MAX) continue;
+        if (bon.c[bon.sel] <= 0 && bon.on < 0) bon.sel = f.type;   // the first find of anything becomes the chosen bonus
         bon.c[f.type] = Math.min(BONUS_MAX, bon.c[f.type] + BONUS_ADD); scene.remove(f.g); finds.splice(k, 1);
         pickChime(f.type); toast(BONUS[f.type].name + " +" + BONUS_ADD + " с"); bonusHud(); } }
   }
