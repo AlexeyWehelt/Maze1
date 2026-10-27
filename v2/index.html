@@ -107,6 +107,31 @@ button { font: inherit; cursor: pointer; }
 .touch .bon .nm span { display: none; }
 .touch .bon .bar { width: 64px; }
 @media (max-height: 480px) { .bon { padding: 4px 8px; } .bon svg { width: 24px; height: 24px; } }
+.btns { display: flex; flex-wrap: wrap; gap: 10px; }
+.go.alt { background: transparent; color: var(--graphite); box-shadow: inset 0 0 0 2px var(--graphite); }
+.winpts { font-weight: 700; }
+.winpts:empty { display: none; }
+.shopbtn { position: absolute; right: 128px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); background: var(--paper); color: var(--graphite); border: 1.5px solid var(--graphite); border-radius: 6px; padding: 8px 12px; font-size: 13px; font-weight: 700; }
+.touch .shopbtn { right: auto; left: 50%; transform: translateX(-50%); bottom: auto; top: calc(48px + env(safe-area-inset-top, 0px)); padding: 6px 10px; }
+#shop { z-index: 4; }
+.shopcard { max-width: 44rem; transform: rotate(-.4deg); }
+.shop-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.shop-pts { font-family: var(--mono); font-size: 20px; }
+.shop-pts b { font-family: var(--body); font-weight: 400; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: #5d634d; margin-right: 6px; }
+.shop-body { display: grid; grid-template-columns: 160px 1fr; gap: 14px; align-items: start; }
+#shopView { width: 160px; height: 200px; background: rgba(255,255,255,.35); border: 1px solid var(--line); border-radius: 8px; }
+#shopList { display: grid; gap: 10px; }
+.shop-sec h2 { margin: 0 0 4px; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: #3e4430; }
+.shop-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.item { display: grid; gap: 1px; text-align: left; background: rgba(255,255,255,.55); color: var(--ink); border: 1.5px solid var(--line); border-radius: 6px; padding: 5px 9px; font-size: 13px; font-weight: 700; }
+.item small { font-family: var(--mono); font-weight: 400; font-size: 11px; color: #4a5038; }
+.item.on { background: var(--graphite); color: var(--paper); border-color: var(--graphite); }
+.item.on small { color: var(--paper); }
+.item.poor { opacity: .5; }
+.item:focus-visible, .shopbtn:focus-visible { outline: 2px solid var(--mark); outline-offset: 2px; }
+#shopMsg { min-height: 1.2em; margin: 0; font-weight: 700; }
+#shopMsg:empty { display: none; }
+@media (max-width: 560px), (max-height: 480px) { .shop-body { grid-template-columns: 110px 1fr; } #shopView { width: 110px; height: 138px; } .item { padding: 3px 7px; font-size: 12px; } }
 .restart { position: absolute; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px; font-size: 13px; }
 </style>
 
@@ -126,6 +151,7 @@ button { font: inherit; cursor: pointer; }
       <span><b>Время</b><em id="time">0:00.0</em></span>
       <span><b>Путь</b><em id="dist">0 м</em></span>
       <span><b>Места</b><em id="lands">1/28</em></span>
+      <span><b>Баллы</b><em id="pts">0</em></span>
       <span id="onlineWrap" hidden><b>Игроки</b><em id="online">1</em></span>
     </div>
     <div class="right">
@@ -153,12 +179,21 @@ button { font: inherit; cursor: pointer; }
     <button class="bon" hidden data-b="1" style="--c:#e8402a" type="button"><kbd>2</kbd><svg viewBox="0 0 32 32" aria-hidden="true"><rect x="9" y="4" width="14" height="25" rx="3" fill="#e8402a" stroke="#1f2318" stroke-width="1.5"/><rect x="9" y="8" width="14" height="3" fill="#ffd23a"/><path d="M18 12l-5 8h4l-2 7 6-9h-4l2-6z" fill="#ffd23a" stroke="#1f2318" stroke-width="1"/></svg><span class="nm"><span>Энергетик</span><em>0 с</em></span><span class="bar"><i><b></b></i><i><b></b></i><i><b></b></i></span></button>
   </div>
   <div id="toast" hidden></div>
+  <button class="shopbtn" id="shopBtn" type="button" hidden>Магазин</button>
+  <div class="overlay" id="shop" hidden>
+    <div class="card shopcard" role="dialog" aria-labelledby="shopH">
+      <div class="shop-head"><h1 id="shopH">Магазин</h1><span class="shop-pts"><b>Баллы</b><em id="shopPts">0</em></span></div>
+      <div class="shop-body"><canvas id="shopView" width="160" height="200" aria-label="Ваш человечек"></canvas><div id="shopList"></div></div>
+      <p id="shopMsg" role="status"></p>
+      <button class="go" id="shopClose" type="button">Готово</button>
+    </div>
+  </div>
   <button class="restart" id="restart">Заново <kbd>R</kbd></button>
   <div id="rotate">Поверните телефон горизонтально</div>
   <div class="overlay" id="intro">
     <div class="card">
       <h1>Лабиринт со стикера</h1>
-      <p>Найдите выход. По дороге собирайте тапочки — в них динозавр не слышит шагов — и энергетик, он ускоряет бег.</p>
+      <p>Найдите выход — каждый раз он в новом месте, далеко от старта. За прохождение дают баллы, на них в магазине покупаются глаза, одежда и шапки. По дороге собирайте тапочки — в них динозавр не слышит шагов — и энергетик, он ускоряет бег.</p>
       <form id="login" class="login" novalidate>
         <div id="netFields" hidden>
           <label for="pname">Имя<input id="pname" name="pname" maxlength="16" autocomplete="username" autocapitalize="off" spellcheck="false"></label>
@@ -185,8 +220,9 @@ button { font: inherit; cursor: pointer; }
       <h1>Дошли до E</h1>
       <div class="result" id="result"></div>
       <p id="best"></p>
+      <p id="winPts" class="winpts"></p>
       <ol id="top" class="top"></ol>
-      <button class="go" id="again">Пройти ещё раз</button>
+      <div class="btns"><button class="go" id="again">Пройти ещё раз</button><button class="go alt" id="winShop" type="button">Магазин</button></div>
     </div>
   </div>
 </div>
@@ -226,7 +262,8 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     for (let h = 0; h < q.length; h++) { const i = q[h], c = i % W; if (dist[i] >= SAFE_CELLS + 10) continue;
       for (const n of [i - 1, i + 1, i - W, i + W]) { if (n < 0 || n >= W * H || Math.abs((n % W) - c) > 1 || bits[n] || dist[n] >= 0) continue; dist[n] = dist[i] + 1; if (dist[n] <= SAFE_CELLS) safe[n] = 1; q.push(n); } } }
   const safeAt = (x, z) => safe[Math.max(0, Math.min(H - 1, Math.floor(z * K))) * W + Math.max(0, Math.min(W - 1, Math.floor(x * K)))] === 1;
-  const EX = (MAZE.exit[0] + .5) / K, EZ = (MAZE.exit[1] + .5) / K;
+  const EX0 = (MAZE.exit[0] + .5) / K, EZ0 = (MAZE.exit[1] + .5) / K;   // the exit drawn on the sticker
+  let EX = EX0, EZ = EZ0;   // this game's exit: a new far-away spot every game
   const EYE = 0.42, RAD = 0.085;
 
   // seeded random so the world is the same every visit
@@ -826,6 +863,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
   document.querySelector(".stat").addEventListener("pointerdown", e => { e.preventDefault(); secretTap(); });
   const keys = {}, move = { f: false, b: false, l: false, r: false };
   addEventListener("keydown", e => {
+    if (shopOpen()) { if (e.key === "Escape") closeShop(); return; }
     if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "BUTTON")) return;
     const k = e.key.toLowerCase();
     if (["arrowup", "arrowdown", "arrowleft", "arrowright", " "].includes(k)) e.preventDefault();
@@ -889,7 +927,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
   let zoneTimer = 0, curZone = -1, zoneHold = 0, pendingZone = -1;
   function showZone() {}
   function begin() { audioInit(); goLandscape(); intro.hidden = true; st.running = true; curZone = zoneAt(st.x, st.z); }
-  function restart() { bonusReset(); st = fresh(); pitch = 0; win.hidden = true; st.running = intro.hidden; curZone = zoneAt(st.x, st.z); reveal(); updateHud(); drawMini(); }
+  function restart() { bonusReset(); newExit(); st = fresh(); pitch = 0; win.hidden = true; st.running = intro.hidden; curZone = zoneAt(st.x, st.z); reveal(); updateHud(); drawMini(); }
   document.getElementById("restart").addEventListener("click", () => { if (cut) return; audioInit(); restart(); resetWorld(); });
   document.getElementById("again").addEventListener("click", () => { audioInit(); restart(); resetWorld(); });
 
@@ -947,6 +985,10 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     if (!best || st.t < best) { try { localStorage.setItem("sticker-maze-best" + ROOM, String(st.t)); } catch (e) {} bestEl.textContent = best ? "Новый рекорд. Прошлый: " + fmt(best) + "." : "Первое прохождение. Попробуйте быстрее или загляните во все 28 мест."; }
     else bestEl.textContent = "Ваш рекорд: " + fmt(best) + ".";
     if (NET.on) NET.backend.saveBest(NET.me, Math.round(st.t * 10) / 10).then(showTop).catch(() => {}); else showTop();
+    const pts = finishPoints(st.t), ptsLine = document.getElementById("winPts");
+    ptsLine.textContent = "+" + pts.total + " баллов: " + pts.base + " за выход" + (pts.speed ? " и " + pts.speed + " за скорость" : "") + ".";
+    profChange(cur => ({ pts: Math.floor(+cur.pts || 0) + pts.total, own: cur.own || FREE, w: cur.w || WEAR0 }))
+      .then(() => { ptsLine.textContent += " Всего: " + prof.pts + "."; }).catch(() => { ptsLine.textContent += " (не удалось сохранить на сервере)"; });
     win.hidden = false; document.getElementById("again").focus();
   }
 
@@ -996,7 +1038,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
   }
   const idxOf = (x, z) => Math.max(0, Math.min(H - 1, Math.floor(z * K))) * W + Math.max(0, Math.min(W - 1, Math.floor(x * K)));
   // keep only the part of the maze connected to the exit: pockets that can be reached only through the start zone stay dinosaur-free
-  { const reach = field(idxOf(EX, EZ), new Int32Array(W * H)); for (let i = 0; i < W * H; i++) if (nav[i] && reach[i] < 0) nav[i] = 0;
+  { const reach = field(idxOf(EX0, EZ0), new Int32Array(W * H)); for (let i = 0; i < W * H; i++) if (nav[i] && reach[i] < 0) nav[i] = 0;
     navCells.length = 0; for (let i = 0; i < W * H; i++) if (nav[i]) navCells.push(i); }
   const cellX = i => (i % W + .5) / K, cellZ = i => ((i / W | 0) + .5) / K;
   function lineOfSight(x1, z1, x2, z2) {
@@ -1199,7 +1241,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
       seeds.forEach((sd, k) => { field(sd, tmp); for (const i of navCells) if (tmp[i] >= 0 && tmp[i] < dseed[i]) { dseed[i] = tmp[i]; label[i] = k; } }); };
     // seeds as far from each other as the corridors allow
     // (the first one is always at the exit, so the same number of dinosaurs always gives the same map of territories)
-    const seeds = [nearestNav(idxOf(EX, EZ))]; dseed.fill(1 << 30);
+    const seeds = [nearestNav(idxOf(EX0, EZ0))]; dseed.fill(1 << 30);
     for (let k = 1; k <= n; k++) { field(seeds[k - 1], tmp); for (const i of navCells) if (tmp[i] >= 0 && tmp[i] < dseed[i]) dseed[i] = tmp[i];
       if (k < n) { let bi = -1; for (const i of navCells) if (!shy[i] && (bi < 0 || dseed[i] > dseed[bi])) bi = i; seeds.push(bi); } }
     // then pull each seed to the middle of its territory, twice
@@ -1629,6 +1671,23 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     if (t >= 5) { cut = null; human.visible = false; restart(); if (NET.on) { d.net && Object.assign(d, { x: d.net.x, z: d.net.z }); if (NET.host) { d.mode = "calm"; d.tid = null; d.alertT = 0; pickWander(d); } } else spawnAll(); caughtT = 1.2; fadeEl.style.opacity = 0; }
   }
 
+  // ---------- the exit: every game it is somewhere else, always among the spots farthest from S on foot ----------
+  const exitSpots = (() => {
+    const d = new Int32Array(W * H).fill(-1), s0 = idxOf(SX, SZ), q = [s0]; d[s0] = 0;
+    for (let h = 0; h < q.length; h++) { const i = q[h], c = i % W; for (const n of [i - 1, i + 1, i - W, i + W]) { if (n < 0 || n >= W * H || Math.abs((n % W) - c) > 1 || bits[n] || d[n] >= 0) continue; d[n] = d[i] + 1; q.push(n); } }
+    let far = 0; for (const i of navCells) if (d[i] > far) far = d[i];
+    const clear = i => { const c = i % W, r = (i / W) | 0; for (let dr = -3; dr <= 3; dr++) for (let dc = -3; dc <= 3; dc++) { const j = (r + dr) * W + c + dc; if (j < 0 || j >= W * H || collH[j] > 0) return false; } return true; };
+    const out = []; for (const i of navCells) if (d[i] >= far * .8 && !squeeze[i] && clear(i)) out.push(i);
+    return out.length ? out : [nearestNav(idxOf(EX0, EZ0))];
+  })();
+  function newExit() {
+    let i = 0;
+    for (let t = 0; t < 40; t++) { i = exitSpots[Math.floor(Math.random() * exitSpots.length)]; if (Math.hypot(cellX(i) - EX, cellZ(i) - EZ) > 6) break; }   // not where it was last time
+    EX = cellX(i); EZ = cellZ(i); exitG.position.set(EX, 0, EZ);
+  }
+  newExit();
+  if (dinos.length) { const i = nearestNav(idxOf(EX, EZ)); Object.assign(dinos[0], { x: cellX(i), z: cellZ(i) }); pickWander(dinos[0]); }   // the one that starts at the exit
+
   // ---------- bonuses: slippers (dinosaurs can't hear your steps) and an energy drink (runs 1.1× faster) ----------
   // Each find adds 10 s to that bonus; it is spent only while Shift or its phone button is held. A bonus you have none of is not shown.
   // Finds lie about the maze for each player on their own, and new ones turn up every so often.
@@ -1739,9 +1798,10 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
   // ---------- multiplayer ----------
   // One shared world. Every player sends their own position; the player who joined first hosts the dinosaurs
   // (if they leave, the next one takes over). There are always players + 2 dinosaurs.
-  const NET = { on: false, me: null, name: "", host: false, ready: false, players: {}, join: 0, backend: null, sendT: 0, beatT: 0, dinoT: 0, ensureT: 0, last: "", stale: {}, hostKey: null, worldAt: 0, tick: 0 };
+  const NET = { on: false, me: null, name: "", host: false, ready: false, players: {}, join: 0, backend: null, sendT: 0, beatT: 0, dinoT: 0, ensureT: 0, last: "", reloc: [], stale: {}, hostKey: null, worldAt: 0, tick: 0 };
   // A separate copy of the game (window.MAZE_ROOM) gets its own shared world, players and records; names and passwords are common.
   const ROOM = String(window.MAZE_ROOM || "").replace(/[^a-z0-9]/gi, "").slice(0, 12);
+  const SHOPK = ROOM ? "shop_" + ROOM : "shop";
   const P_PRES = ROOM ? "world/" + ROOM + "/p" : "presence", P_WORLD = ROOM ? "world/" + ROOM + "/d" : "world/d", BEST = ROOM ? "best_" + ROOM : "best";
   const keyOf = name => name.trim().toLowerCase().replace(/[.#$\[\]\/\s]+/g, "_").slice(0, 16);
   async function hashCode(key, code) {
@@ -1759,7 +1819,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
         const ref = db.ref("users/" + key);
         const res = await ref.transaction(cur => cur === null ? { name, h, c: fb.database.ServerValue.TIMESTAMP } : undefined);
         const u = res.snapshot.val(); if (!u || u.h !== h) return { ok: false };
-        return { ok: true, best: u[BEST] || null, isNew: res.committed };
+        return { ok: true, best: u[BEST] || null, isNew: res.committed, shop: u[SHOPK] || null };
       },
       join(key, h) {
         meRef = db.ref(P_PRES + "/" + key);
@@ -1772,6 +1832,10 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
       },
       setMe(data) { lastMe = data; if (meRef) meRef.set(data); },
       setDinos(obj) { db.ref(P_WORLD).set(obj); },
+      // points and clothes change in one server transaction, so two tabs can't spend the same points twice
+      async shop(key, fn) { let applied = false; const def = { pts: 0, own: "e0,c0,h0", w: "e0.c0.h0" };
+        const res = await db.ref("users/" + key + "/" + SHOPK).transaction(cur => { const base = cur || def, n = fn(base); applied = !!n; return n || (cur === null ? base : undefined); });
+        return { v: res.snapshot.val(), ok: res.committed && applied }; },
       async saveBest(key, t) { await db.ref("users/" + key + "/" + BEST).transaction(cur => (cur === null || t < cur) ? t : undefined); },
       async top() { const s = await db.ref("users").orderByChild(BEST).startAt(0.1).limitToFirst(10).get(); const out = []; s.forEach(c => { const v = c.val(); if (v && v[BEST]) out.push({ name: v.name, best: v[BEST] }); }); return out; }
     };
@@ -1791,10 +1855,12 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     setInterval(push, 1000);
     return {
       now: () => Date.now(),
-      async login(key, name, hsh) { const u = users(); if (!u[key]) { u[key] = { name, h: hsh }; save(u); return { ok: true, best: null, isNew: true }; } if (u[key].h !== hsh) return { ok: false }; return { ok: true, best: u[key][BEST] || null }; },
+      async login(key, name, hsh) { const u = users(); if (!u[key]) { u[key] = { name, h: hsh }; save(u); return { ok: true, best: null, isNew: true }; } if (u[key].h !== hsh) return { ok: false }; return { ok: true, best: u[key][BEST] || null, shop: u[key][SHOPK] || null }; },
       join(key, handlers) { myKey = key; h = handlers; ch.postMessage({ k: "hello" }); setTimeout(() => { h.dinos(world); push(); }, 400); },
       setMe(data) { lastMe = data; ch.postMessage({ k: "p", key: myKey, data }); },
       setDinos(obj) { world = obj; ch.postMessage({ k: "d", obj }); },
+      async shop(key, fn) { const u = users(); if (!u[key]) return { v: null, ok: false }; const cur = u[key][SHOPK] || { pts: 0, own: "e0,c0,h0", w: "e0.c0.h0" }, n = fn(cur);
+        if (n) { u[key][SHOPK] = n; save(u); } return { v: n || cur, ok: !!n }; },
       async saveBest(key, t) { const u = users(); if (u[key] && (!u[key][BEST] || t < u[key][BEST])) { u[key][BEST] = t; save(u); } },
       async top() { return Object.values(users()).filter(v => v[BEST]).sort((a, b) => a[BEST] - b[BEST]).slice(0, 10).map(v => ({ name: v.name, best: v[BEST] })); }
     };
@@ -1813,18 +1879,183 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
   })();
 
   // --- other players: a little person with a name above ---
-  function makeAvatar(name) {
-    const g = new THREE.Group(); let hsh = 0; for (const ch of name) hsh = (hsh * 31 + ch.charCodeAt(0)) >>> 0;
-    const shirt = dm(new THREE.Color().setHSL((hsh % 360) / 360, .65, .5).getHex()), skin = dm(0xf0c8a0), pants = dm(0x2a2e3a), hair = dm(0x3a2a1a);
+  // ---------- wardrobe: points for reaching the exit, spent on eyes, clothes and hats that the other players see ----------
+  const SHOP = {
+    e: { title: "Глаза", items: [
+      { id: "e0", name: "Обычные", price: 0 }, { id: "e1", name: "Голубые", price: 60 }, { id: "e4", name: "Мультяшные", price: 120 },
+      { id: "e2", name: "Тёмные очки", price: 150 }, { id: "e3", name: "Лазерные", price: 250 } ] },
+    c: { title: "Одежда", items: [
+      { id: "c0", name: "Футболка", price: 0 }, { id: "c1", name: "Тельняшка", price: 100 }, { id: "c2", name: "Спортивный костюм", price: 150 },
+      { id: "c4", name: "Камуфляж", price: 200 }, { id: "c3", name: "Смокинг", price: 250 }, { id: "c5", name: "Золотой костюм", price: 400 } ] },
+    h: { title: "Шапка", items: [
+      { id: "h0", name: "Без шапки", price: 0 }, { id: "h1", name: "Кепка", price: 80 }, { id: "h2", name: "Шапка с помпоном", price: 120 },
+      { id: "h3", name: "Ковбойская шляпа", price: 180 }, { id: "h4", name: "Цилиндр", price: 220 }, { id: "h6", name: "Шлем викинга", price: 300 }, { id: "h5", name: "Корона", price: 350 } ] }
+  };
+  const WEAR0 = "e0.c0.h0", FREE = "e0,c0,h0";
+  const parseWear = w => { const o = { e: "e0", c: "c0", h: "h0" }; String(w || "").split(".").forEach(t => { if (/^[ech]\d$/.test(t)) o[t[0]] = t; }); return o; };
+  const wearStr = o => o.e + "." + o.c + "." + o.h;
+  const SHOP_PRICE = {}; for (const k in SHOP) for (const it of SHOP[k].items) SHOP_PRICE[it.id] = it.price;
+
+  // textures for the fancier clothes
+  const clothTex = (draw) => { const cv = document.createElement("canvas"); cv.width = cv.height = 64; draw(cv.getContext("2d")); const t = new THREE.CanvasTexture(cv); t.magFilter = THREE.NearestFilter; return t; };
+  const TEX_STRIPE = clothTex(c => { for (let y = 0; y < 64; y += 16) { c.fillStyle = "#f4f6fa"; c.fillRect(0, y, 64, 8); c.fillStyle = "#1f3f8f"; c.fillRect(0, y + 8, 64, 8); } });
+  const TEX_CAMO = clothTex(c => { c.fillStyle = "#5d6b3a"; c.fillRect(0, 0, 64, 64); const cols = ["#3b4a25", "#8a8a55", "#2a2e1a", "#6f7a45"]; let s = 7;
+    const r = () => (s = (s * 9301 + 49297) % 233280) / 233280; for (let k = 0; k < 26; k++) { c.fillStyle = cols[k % 4]; c.beginPath(); c.ellipse(r() * 64, r() * 64, 4 + r() * 9, 3 + r() * 6, r() * 3, 0, 7); c.fill(); } });
+  const TEX_TRACK = clothTex(c => { c.fillStyle = "#c8261a"; c.fillRect(0, 0, 64, 64); c.fillStyle = "#fff"; c.fillRect(6, 0, 6, 64); c.fillRect(52, 0, 6, 64); });
+  const lam = (c, extra) => new THREE.MeshLambertMaterial(Object.assign({ color: c, flatShading: true }, extra || {}));
+  const basic = c => new THREE.MeshBasicMaterial({ color: c });
+
+  // builds a little person facing +x into `g`; returns the parts that animate
+  function buildPerson(g, wear, hue) {
+    const w = parseWear(wear), skin = lam(0xf0c8a0), hair = lam(0x3a2a1a);
+    let shirt, sleeve, pants;
+    if (w.c === "c1") { shirt = sleeve = lam(0xffffff, { map: TEX_STRIPE }); pants = lam(0x1d2233); }
+    else if (w.c === "c2") { shirt = sleeve = pants = lam(0xffffff, { map: TEX_TRACK }); }
+    else if (w.c === "c3") { shirt = sleeve = lam(0x15161a); pants = lam(0x15161a); }
+    else if (w.c === "c4") { shirt = sleeve = pants = lam(0xffffff, { map: TEX_CAMO }); }
+    else if (w.c === "c5") { shirt = sleeve = pants = new THREE.MeshPhongMaterial({ color: 0xe0b23a, emissive: 0x3a2a00, specular: 0xfff2b0, shininess: 60, flatShading: true }); }
+    else { shirt = sleeve = lam(new THREE.Color().setHSL(hue, .65, .5).getHex()); pants = lam(0x2a2e3a); }
     const legL = bx(.035, .12, .035, pants, 0, .06, .025, g), legR = bx(.035, .12, .035, pants, 0, .06, -.025, g);
-    bx(.05, .12, .09, shirt, 0, .18, 0, g); bx(.025, .1, .025, shirt, 0, .19, .06, g); bx(.025, .1, .025, shirt, 0, .19, -.06, g);
-    bx(.06, .06, .06, skin, 0, .27, 0, g); bx(.064, .02, .064, hair, 0, .305, 0, g); bx(.012, .012, .03, pants, .031, .275, 0, g);
+    bx(.05, .12, .09, shirt, 0, .18, 0, g);
+    const armL = bx(.025, .1, .025, sleeve, 0, .19, .06, g), armR = bx(.025, .1, .025, sleeve, 0, .19, -.06, g);
+    if (w.c === "c3") { bx(.004, .1, .03, lam(0xffffff), .026, .185, 0, g); bx(.006, .012, .03, basic(0xc8141e), .03, .232, 0, g); }   // shirt front and bow tie
+    bx(.06, .06, .06, skin, 0, .27, 0, g);
+    if (w.h !== "h6" && w.h !== "h4") bx(.064, .02, .064, hair, 0, .305, 0, g);
+    // eyes, on the front of the head
+    const F = .031;
+    if (w.e === "e1") { for (const s of [-1, 1]) { bx(.004, .014, .016, lam(0xffffff), F, .278, s * .014, g); bx(.005, .008, .008, basic(0x1e78e8), F + .001, .277, s * .014, g); } }
+    else if (w.e === "e2") { bx(.006, .014, .056, basic(0x0b0b0e), F + .002, .279, 0, g); bx(.003, .003, .066, basic(0x0b0b0e), F + .002, .286, 0, g); }
+    else if (w.e === "e3") { for (const s of [-1, 1]) bx(.006, .009, .014, basic(0xff2a1a), F + .001, .279, s * .014, g); }
+    else if (w.e === "e4") { for (const s of [-1, 1]) { bx(.012, .022, .022, lam(0xffffff), F + .004, .281, s * .014, g); bx(.004, .01, .01, basic(0x111111), F + .011, .279, s * .014, g); } }
+    else bx(.012, .012, .03, lam(0x2a2e3a), F, .275, 0, g);
+    // hats
+    let top = .315;
+    if (w.h === "h1") { const red = lam(0xd1321b); bx(.066, .022, .066, red, 0, .322, 0, g); bx(.036, .005, .06, red, .046, .313, 0, g); top = .335; }
+    else if (w.h === "h2") { const knit = lam(0x2f7a3a), stripe = lam(0xfffbe8); bx(.068, .03, .068, knit, 0, .325, 0, g); bx(.07, .008, .07, stripe, 0, .312, 0, g);
+      const pom = new THREE.Mesh(new THREE.SphereGeometry(.014, 8, 6), stripe); pom.position.set(0, .35, 0); g.add(pom); top = .366; }
+    else if (w.h === "h3") { const leather = lam(0x8a5a2b); const brim = new THREE.Mesh(new THREE.CylinderGeometry(.06, .06, .006, 14), leather); brim.position.y = .318; g.add(brim);
+      const crown = new THREE.Mesh(new THREE.CylinderGeometry(.026, .032, .036, 10), leather); crown.position.y = .338; g.add(crown); bx(.002, .006, .066, lam(0x3a2a1a), 0, .324, 0, g); top = .358; }
+    else if (w.h === "h4") { const black = lam(0x141418); const brim = new THREE.Mesh(new THREE.CylinderGeometry(.046, .046, .005, 14), black); brim.position.y = .302; g.add(brim);
+      const crown = new THREE.Mesh(new THREE.CylinderGeometry(.03, .03, .07, 14), black); crown.position.y = .338; g.add(crown);
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(.0305, .0305, .01, 14), basic(0x9a1a22)); band.position.y = .31; g.add(band); top = .375; }
+    else if (w.h === "h5") { const gold = new THREE.MeshPhongMaterial({ color: 0xf0c030, emissive: 0x402a00, shininess: 80, flatShading: true });
+      const ring = new THREE.Mesh(new THREE.CylinderGeometry(.034, .034, .018, 10, 1, true), gold); ring.material.side = THREE.DoubleSide; ring.position.y = .323; g.add(ring);
+      for (let k = 0; k < 5; k++) { const a = k / 5 * Math.PI * 2, sp = new THREE.Mesh(new THREE.ConeGeometry(.007, .02, 4), gold); sp.position.set(Math.cos(a) * .03, .341, Math.sin(a) * .03); g.add(sp); }
+      const gem = new THREE.Mesh(new THREE.OctahedronGeometry(.006), basic(0xd1213b)); gem.position.set(.035, .323, 0); g.add(gem); top = .355; }
+    else if (w.h === "h6") { const steel = new THREE.MeshPhongMaterial({ color: 0x9aa2ab, shininess: 40, flatShading: true }), horn = lam(0xeee3c4);
+      const dome = new THREE.Mesh(new THREE.SphereGeometry(.036, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), steel); dome.position.y = .3; g.add(dome);
+      for (const s of [-1, 1]) { const h = new THREE.Mesh(new THREE.ConeGeometry(.008, .04, 6), horn); h.position.set(0, .33, s * .04); h.rotation.x = -s * .9; g.add(h); } top = .345; }
+    return { legL, legR, armL, armR, top };
+  }
+  // a person seen by the other players, with a name tag above
+  function makeAvatar(name, wear) {
+    const g = new THREE.Group(); let hsh = 0; for (const ch of name) hsh = (hsh * 31 + ch.charCodeAt(0)) >>> 0;
+    const parts = buildPerson(g, wear, (hsh % 360) / 360);
     const cv = document.createElement("canvas"); cv.width = 256; cv.height = 64; const c = cv.getContext("2d");
     c.font = "bold 34px sans-serif"; c.textAlign = "center"; c.textBaseline = "middle"; const w = Math.min(244, c.measureText(name).width + 24);
     c.fillStyle = "rgba(20,22,16,.7)"; c.fillRect(128 - w / 2, 8, w, 48); c.fillStyle = "#fffbe8"; c.fillText(name, 128, 34, 236);
-    const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthWrite: false })); label.scale.set(.44, .11, 1); label.position.y = .43; g.add(label);
-    g.scale.setScalar(1.3); scene.add(g); return { g, legL, legR };
+    const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthWrite: false })); label.scale.set(.44, .11, 1); label.position.y = Math.max(.43, parts.top + .09); g.add(label);
+    g.scale.setScalar(1.3); scene.add(g); return { g, legL: parts.legL, legR: parts.legR, wear: wear || WEAR0 };
   }
+  // the person in the catch scene wears what you wear
+  function dressHuman(wear) {
+    while (human.children.length) human.remove(human.children[0]);
+    const p = buildPerson(human, wear, .6); human.userData.arms = [p.armL, p.armR];
+  }
+
+  // --- the profile: points, what you own, what you wear ---
+  const prof = { pts: 0, own: FREE, wear: WEAR0 };
+  const ptsEl = document.getElementById("pts");
+  function profShow() { ptsEl.textContent = prof.pts; const sp = document.getElementById("shopPts"); if (sp) sp.textContent = prof.pts; }
+  function profSet(v) { prof.pts = Math.max(0, Math.floor(+(v && v.pts) || 0)); prof.own = (v && v.own) || FREE; prof.wear = (v && v.w) || WEAR0; dressHuman(prof.wear); profShow(); }
+  // without a server (or before signing in) the profile lives in this browser
+  const SOLO_KEY = "sticker-maze-shop" + ROOM;
+  const soloStore = {
+    get() { try { return JSON.parse(localStorage.getItem(SOLO_KEY) || "null"); } catch (e) { return null; } },
+    put(v) { try { localStorage.setItem(SOLO_KEY, JSON.stringify(v)); } catch (e) {} }
+  };
+  const profObj = () => ({ pts: prof.pts, own: prof.own, w: prof.wear });
+  // all changes go through one function, so the server sees them as one safe step
+  async function profChange(fn) {
+    if (NET.on && NET.backend.shop) { const r = await NET.backend.shop(NET.me, fn); if (r.v) profSet(r.v); return r.ok; }
+    const cur = soloStore.get() || profObj(), next = fn(cur); if (!next) return false; soloStore.put(next); profSet(next); return true;
+  }
+  profSet(soloStore.get());
+
+  // points for reaching the exit: 100, plus up to 100 more for speed (full bonus under a minute, none after four)
+  function finishPoints(t) { const speed = Math.round(100 * Math.max(0, Math.min(1, (240 - t) / 180))); return { base: 100, speed, total: 100 + speed }; }
+
+  // --- the shop window ---
+  const shopEl = document.getElementById("shop"), shopList = document.getElementById("shopList"), shopMsg = document.getElementById("shopMsg"), shopBtn = document.getElementById("shopBtn");
+  const shopOpen = () => !shopEl.hidden;
+  let prevR = null, prevScene = null, prevCam = null, prevMan = null, prevWear = "", shopFrom = null;
+  function shopPreview() {
+    if (!prevR) {
+      const cv = document.getElementById("shopView");
+      try { prevR = new THREE.WebGLRenderer({ canvas: cv, antialias: true, alpha: true }); } catch (e) { cv.hidden = true; return; }
+      prevR.setPixelRatio(Math.min(2, devicePixelRatio || 1)); prevR.setSize(160, 200, false);
+      prevScene = new THREE.Scene(); prevScene.add(new THREE.HemisphereLight(0xfffbe8, 0x55603a, 1.1));
+      const sun = new THREE.DirectionalLight(0xffffff, .7); sun.position.set(1, 2, 1.5); prevScene.add(sun);
+      prevCam = new THREE.PerspectiveCamera(30, 160 / 200, .05, 5); prevCam.position.set(.62, .3, 0); prevCam.lookAt(0, .2, 0);
+    }
+    if (prevWear !== prof.wear || !prevMan) {
+      if (prevMan) prevScene.remove(prevMan);
+      prevMan = new THREE.Group(); buildPerson(prevMan, prof.wear, .6); prevScene.add(prevMan); prevWear = prof.wear;
+    }
+  }
+  function shopRender() {
+    const w = parseWear(prof.wear), own = prof.own.split(","); shopList.textContent = "";
+    for (const k of ["h", "e", "c"]) {
+      const sec = document.createElement("div"); sec.className = "shop-sec";
+      const h = document.createElement("h2"); h.textContent = SHOP[k].title; sec.appendChild(h);
+      const row = document.createElement("div"); row.className = "shop-row";
+      for (const it of SHOP[k].items) {
+        const b = document.createElement("button"), has = own.includes(it.id), on = w[k] === it.id;
+        b.type = "button"; b.className = "item" + (on ? " on" : "") + (!has && prof.pts < it.price ? " poor" : "");
+        b.innerHTML = "<span></span><small></small>"; b.firstChild.textContent = it.name;
+        b.lastChild.textContent = on ? "надето" : has ? "надеть" : it.price + " б.";
+        b.setAttribute("aria-pressed", on ? "true" : "false");
+        b.addEventListener("click", () => shopPick(k, it));
+        row.appendChild(b);
+      }
+      sec.appendChild(row); shopList.appendChild(sec);
+    }
+    profShow(); shopPreview();
+  }
+  async function shopPick(k, it) {
+    shopMsg.textContent = "";
+    const has = prof.own.split(",").includes(it.id);
+    if (!has && prof.pts < it.price) { shopMsg.textContent = "Не хватает баллов: нужно ещё " + (it.price - prof.pts) + "."; return; }
+    let ok = false;
+    try {
+      ok = await profChange(cur => {
+        const own = String(cur.own || FREE).split(","), w = parseWear(cur.w), pts = Math.floor(+cur.pts || 0);
+        if (!own.includes(it.id)) { if (pts < it.price) return null; own.push(it.id); w[k] = it.id; return { pts: pts - it.price, own: own.join(","), w: wearStr(w) }; }
+        w[k] = it.id; return { pts, own: own.join(","), w: wearStr(w) };
+      });
+    } catch (e) { shopMsg.textContent = "Не получилось связаться с сервером. Попробуйте ещё раз."; return; }
+    if (!ok) shopMsg.textContent = "Не хватает баллов.";
+    else if (!has) shopMsg.textContent = "Куплено: " + it.name + ".";
+    shopRender(); if (NET.on) sendMe(true);
+  }
+  let shopSpin = 0;
+  function shopLoop(now) {
+    if (!shopOpen()) return;
+    if (prevR && prevMan) { prevMan.rotation.y = now * .0008; prevR.render(prevScene, prevCam); }
+    requestAnimationFrame(shopLoop);
+  }
+  function openShop(from) {
+    releaseMouse(); for (const k in keys) keys[k] = false; bonusHold = false;
+    shopFrom = from; shopMsg.textContent = ""; shopEl.hidden = false; shopRender(); requestAnimationFrame(shopLoop);
+    document.getElementById("shopClose").focus();
+  }
+  function closeShop() { shopEl.hidden = true; if (shopFrom === "win") document.getElementById("again").focus(); }
+  document.getElementById("shopClose").addEventListener("click", closeShop);
+  document.getElementById("winShop").addEventListener("click", () => openShop("win"));
+  shopBtn.addEventListener("click", () => { if (st.running && safeAt(st.x, st.z) && !cut) openShop("game"); });
+  // the shop opens from the game only while you stand in the start zone, where you are safe
+  function shopBtnTick() { const show = st.running && !st.won && !cut && safeAt(st.x, st.z); if (shopBtn.hidden === show) shopBtn.hidden = !show; if (shopOpen() && shopFrom === "game" && !show) closeShop(); }
+
   function activePlayers() {
     const L = [];
     if (st.running && !st.won && !cut) L.push({ id: NET.on ? NET.me : "me", x: st.x, z: st.z, moving: localMoving, ground: st.ground, safe: safeAt(st.x, st.z), quiet: bonusOn(0) });
@@ -1836,9 +2067,11 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     const now = performance.now();
     for (const key in map) { if (key === NET.me) continue; const v = map[key]; if (!v || typeof v.x !== "number") continue;
       let p = NET.players[key];
-      if (!p) p = NET.players[key] = { key, name: String(v.n || key).slice(0, 16), x: v.x, z: v.z, a: v.a, y: v.y || 0, tx: v.x, tz: v.z, ta: v.a, movingUntil: 0, walk: 0, av: makeAvatar(String(v.n || key).slice(0, 16)) };
+      if (!p) p = NET.players[key] = { key, name: String(v.n || key).slice(0, 16), x: v.x, z: v.z, a: v.a, y: v.y || 0, tx: v.x, tz: v.z, ta: v.a, movingUntil: 0, walk: 0, av: makeAvatar(String(v.n || key).slice(0, 16), v.w) };
       if (Math.hypot(v.x - p.tx, v.z - p.tz) > .01) p.movingUntil = now + 450;
-      if (p.s === 3 && v.s === 1) NET.relocate = (NET.relocate || 0) + 1;
+      if (Array.isArray(v.ex)) { p.ex = +v.ex[0]; p.ez = +v.ex[1]; }
+      if (p.s === 3 && v.s === 1) NET.reloc.push([p.ex ?? EX, p.ez ?? EZ]);
+      if ((v.w || WEAR0) !== p.av.wear) { scene.remove(p.av.g); p.av = makeAvatar(p.name, v.w); }
       p.tx = v.x; p.tz = v.z; p.ta = v.a; p.y = v.y || 0; p.s = v.s; p.e = v.e || null; p.j = v.j || 0; p.bg = !!v.bg; p.q = !!v.q;
     }
     for (const key in NET.players) if (!(key in map)) { scene.remove(NET.players[key].av.g); delete NET.players[key]; }
@@ -1869,13 +2102,13 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     for (const d of dinos.slice()) if (!(d.id in obj) && !(cut && cut.d === d)) removeDino(d);
   }
   function becomeHost() {
-    NET.relocate = 0;
+    NET.reloc.length = 0;
     // take over whatever dinosaurs exist; an empty world gets a fresh set
     for (const d of dinos) { d.net = null; if (!d.dead) { d.mode = "calm"; d.tid = null; d.alertT = 0; pickWander(d); } const n = parseInt(d.id.slice(1)); if (n >= dinoSeq) dinoSeq = n + 1; }
     NET.ensureT = 1.2;
   }
-  function relocateDino() {
-    const i = nearestNav(idxOf(EX, EZ)), k = terr.label[i];
+  function relocateDino(ex, ez) {
+    const i = nearestNav(idxOf(ex, ez)), k = terr.label[i];
     let free = dinos.filter(d => !d.dead && d.busy <= 0 && d.mode === "calm" && !(cut && cut.d === d));
     const others = free.filter(d => d.home !== k); if (others.length) free = others;   // not the one already guarding the exit
     if (!free.length) return;
@@ -1888,7 +2121,9 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
   function hostEnsure() {
     const want = Math.min(MAX_DINOS, Object.keys(NET.players).length + 1 + 2), alive = dinos.filter(d => !d.dead), free = alive.filter(d => d.busy <= 0 && !(cut && cut.d === d));
     if (!dinos.length) { spawnAll(want); return; }
-    if (alive.length < want) pickWander(addDino("d" + (dinoSeq++), cellX(nearestNav(idxOf(EX, EZ))), cellZ(nearestNav(idxOf(EX, EZ)))));   // a newcomer appears at the exit
+    // a newcomer appears at the exit of whoever joined last
+    if (alive.length < want) { let ex = EX, ez = EZ, j = NET.join; for (const p of Object.values(NET.players)) if (p.j > j && p.ex != null) { j = p.j; ex = p.ex; ez = p.ez; }
+      const i = nearestNav(idxOf(ex, ez)); pickWander(addDino("d" + (dinoSeq++), cellX(i), cellZ(i))); }
     else if (alive.length > want && free.length) { const d = free[Math.floor(Math.random() * free.length)]; d.dead = .001; d.mode = "calm"; d.tid = null; }   // someone left: one dies
     // a dinosaur that is eating someone stands still
     for (const p of Object.values(NET.players)) if (p.e) { const d = dinos.find(q => q.id === p.e); if (d && !d.dead) { d.busy = 1; d.mode = "chase"; d.tid = p.key; } }
@@ -1897,9 +2132,9 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
   // my own state, sent when it changes and as a heartbeat
   function sendMe(force) {
     const s = cut ? 2 : st.won ? 3 : st.running ? 1 : 0;
-    if (NET.lastS === 3 && s === 1) NET.relocate = (NET.relocate || 0) + 1;
+    if (NET.lastS === 3 && s === 1) NET.reloc.push([EX, EZ]);
     NET.lastS = s;
-    const me = { n: NET.name, x: r2(st.x), z: r2(st.z), a: r2(st.a), y: r2(st.y), s, e: cut ? cut.d.id : null, j: NET.join };
+    const me = { n: NET.name, x: r2(st.x), z: r2(st.z), a: r2(st.a), y: r2(st.y), s, e: cut ? cut.d.id : null, j: NET.join, ex: [r2(EX), r2(EZ)], w: prof.wear };
     if (document.hidden) me.bg = 1;
     if (bonusOn(0)) me.q = 1;
     const sig = JSON.stringify(me);
@@ -1921,7 +2156,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
     if (!NET.host && NET.ready && NET.hostKey && NET.hostKey !== NET.me && performance.now() - NET.worldAt > 5000) { NET.stale[NET.hostKey] = 1; NET.worldAt = performance.now(); elect(); }
     if (NET.host && NET.ready) {
       NET.ensureT -= dt; if (NET.ensureT <= 0) { NET.ensureT = .6; hostEnsure(); }
-      while (NET.relocate > 0) { NET.relocate--; relocateDino(); }
+      while (NET.reloc.length) relocateDino(...NET.reloc.shift());
       NET.dinoT -= dt;
       if (NET.dinoT <= 0) { NET.dinoT = .16; const o = {};
         for (const d of dinos) o[d.id] = [r2(d.x), r2(d.z), r2(d.a), d.dead ? 3 : d.mode === "calm" && d.irk > .5 ? 1 : MODES.indexOf(d.mode), r2(Math.max(d.alertT, d.irk / DINO.patience * 1.9)), d.tid || (d.irk > .5 ? d.irkId : 0) || 0, d.lost > 0 ? 1 : 0];
@@ -1951,6 +2186,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
       const res = await NET.backend.login(key, name, await hashCode(key, code));
       if (!res.ok) { msgEl.textContent = "Неверный пароль, либо игрок с таким именем уже есть. Введите правильный пароль или выберите другое имя."; loggingIn = false; codeEl.select(); return; }
       try { localStorage.setItem("sticker-maze-name", name); } catch (err) {}
+      profSet(res.shop);
       NET.me = key; NET.name = name; NET.join = NET.backend.now(); NET.on = true; NET.worldAt = performance.now();
       while (dinos.length) removeDino(dinos[0]);   // the shared world replaces the private one
       NET.backend.join(key, { players: onPlayers, dinos: onDinos });
@@ -1976,7 +2212,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
       d[i + 3] = 255;
     }
     mg.putImageData(mimg, 0, 0);
-    if (st.rev[((MAZE.exit[1] / REV) | 0) * RW + ((MAZE.exit[0] / REV) | 0)]) { mg.fillStyle = "#1b6fd1"; mg.font = "bold 22px sans-serif"; mg.textAlign = "center"; mg.textBaseline = "middle"; mg.fillText("E", EX * K, EZ * K); }
+    if (st.rev[((EZ * K / REV) | 0) * RW + ((EX * K / REV) | 0)]) { mg.fillStyle = "#1b6fd1"; mg.font = "bold 22px sans-serif"; mg.textAlign = "center"; mg.textBaseline = "middle"; mg.fillText("E", EX * K, EZ * K); }
     for (const d of dinos) { mg.fillStyle = hunting(d) ? "#ff2a1a" : d.mode === "alert" ? "#ff9a2a" : "#2f8f7a"; mg.beginPath(); mg.arc(d.x * K, d.z * K, 5, 0, 7); mg.fill(); }
     if (NET.on) for (const p of Object.values(NET.players)) if (p.s === 1) { mg.fillStyle = "#1b6fd1"; mg.beginPath(); mg.arc(p.x * K, p.z * K, 4, 0, 7); mg.fill(); }
     mg.save(); mg.translate(st.x * K, st.z * K); mg.rotate(st.a);
@@ -2003,7 +2239,7 @@ const MAZE = {"w":284,"h":266,"grid":"//////////////////////////////////////////
   let last = performance.now(), hudT = 0;
   function frame(now) {
     const dt = Math.min(.05, (now - last) / 1000); last = now;
-    update(dt); findsTick(dt, now); worldUpdate(dt); netTick(dt); blendEnv(dt); updateTorches(now);
+    update(dt); findsTick(dt, now); shopBtnTick(); worldUpdate(dt); netTick(dt); blendEnv(dt); updateTorches(now);
     landBob *= Math.exp(-dt * 10);
     const y = EYE + st.y - landBob + (reduce || !st.ground ? 0 : Math.sin(bob) * .015);
     if (!cut) { camera.position.set(st.x, y, st.z); camera.lookAt(st.x + Math.cos(st.a), y + Math.tan(pitch), st.z + Math.sin(st.a)); }
